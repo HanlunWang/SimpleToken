@@ -1,0 +1,75 @@
+{
+  "groupBy": "client,session,model",
+  "entries": [
+    {
+      "client": "claude",
+      "mergedClients": null,
+      "sessionId": "6513270e-269e-0d37-f2a7-4de452e6b438",
+      "model": "claude-fable-5",
+      "provider": "anthropic",
+      "input": 20563,
+      "output": 84187,
+      "cacheRead": 25783218,
+      "cacheWrite": 251580,
+      "reasoning": 0,
+      "messageCount": 70,
+      "cost": 33.342964,
+      "performance": {
+        "msPer1KTokens": 19.739694,
+        "totalDurationMs": 1257521,
+        "timedTokens": 26119126,
+        "sampleCount": 70,
+        "tokenCoverage": 0.40968
+      }
+    },
+    {
+      "client": "claude",
+      "mergedClients": null,
+      "sessionId": "d23f0824-128b-2f33-0c5c-7fd0a6a3a450",
+      "model": "claude-opus-5",
+      "provider": "anthropic",
+      "input": 1903,
+      "output": 16047,
+      "cacheRead": 8071144,
+      "cacheWrite": 679259,
+      "reasoning": 0,
+      "messageCount": 15,
+      "cost": 8.691629,
+      "performance": {
+        "msPer1KTokens": 11.271096,
+        "totalDurationMs": 240995,
+        "timedTokens": 8766480,
+        "sampleCount": 15,
+        "tokenCoverage": 0.409912
+      }
+    },
+    {
+      "client": "claude",
+      "mergedClients": null,
+      "sessionId": "9531985d-5d9d-c9f8-1818-e811892f902b",
+      "model": "claude-opus-5",
+      "provider": "anthropic",
+      "input": 30844,
+      "output": 12929,
+      "cacheRead": 2282103,
+      "cacheWrite": 76209,
+      "reasoning": 0,
+      "messageCount": 18,
+      "cost": 2.094814,
+      "performance": {
+        "msPer1KTokens": 28.739248,
+        "totalDurationMs": 166216,
+        "timedTokens": 2371278,
+        "sampleCount": 18,
+        "tokenCoverage": 0.404742
+      }
+    }
+  ],
+  "totalInput": 53310,
+  "totalOutput": 113164,
+  "totalCacheRead": 36136464,
+  "totalCacheWrite": 1007048,
+  "totalMessages": 104,
+  "totalCost": 44.129407,
+  "processingTimeMs": 47
+}

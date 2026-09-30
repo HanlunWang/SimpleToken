@@ -1,0 +1,7 @@
+.DS_Store
+build/
+.swiftpm/
+SimpleTokenKit/.build/
+xcuserdata/
+*.xcuserstate
+Config/Signing.local.xcconfig

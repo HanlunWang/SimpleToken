@@ -1,0 +1,47 @@
+name: SimpleToken
+options:
+  bundleIdPrefix: dev.hanlun
+  deploymentTarget:
+    macOS: "26.0"
+  createIntermediateGroups: true
+  developmentLanguage: en
+packages:
+  SimpleTokenKit:
+    path: SimpleTokenKit
+targets:
+  SimpleToken:
+    type: application
+    platform: macOS
+    sources:
+      - App
+      - path: Resources/tokscale
+        type: folder
+        buildPhase: resources
+    dependencies:
+      - package: SimpleTokenKit
+        product: Features
+    info:
+      path: App/Info.plist
+      properties:
+        CFBundleName: SimpleToken
+        CFBundleDisplayName: SimpleToken
+        CFBundleShortVersionString: "0.1.0"
+        CFBundleVersion: "1"
+        LSUIElement: true
+        LSMinimumSystemVersion: "26.0"
+        NSHumanReadableCopyright: "Copyright © 2026 Hanlun Wang. MIT License."
+        CFBundleDevelopmentRegion: en
+        CFBundleLocalizations: [en, zh-Hans]
+    configFiles:
+      Debug: Config/Signing.xcconfig
+      Release: Config/Signing.xcconfig
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: dev.hanlun.simpletoken
+        ENABLE_HARDENED_RUNTIME: false
+        ENABLE_APP_SANDBOX: false
+        SWIFT_VERSION: "6.0"
+        SWIFT_STRICT_CONCURRENCY: complete
+        MACOSX_DEPLOYMENT_TARGET: "26.0"
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        GENERATE_INFOPLIST_FILE: false
