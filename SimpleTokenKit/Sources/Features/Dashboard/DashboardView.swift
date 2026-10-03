@@ -144,11 +144,15 @@ public struct DashboardView: View {
         let exact = settings.exactNumbers
         switch card {
         case .hero:
-            HeroCard(report: report, todayHalfHours: state.todayHalfHours, compact: size != .wide, settings: settings)
+            HeroCard(report: report, todayHalfHours: state.todayHalfHours, compact: size != .wide, settings: settings, colors: colors)
         case .limits:
             LimitsCard(limits: state.limits, colors: colors, settings: settings)
         case .models:
             ModelsCard(report: report, colors: colors, exact: exact, settings: settings)
+        case .map:
+            MapCard(state: state, report: report, colors: colors, exact: exact, settings: settings)
+        case .flow:
+            FlowCard(state: state, report: report, colors: colors, exact: exact, settings: settings)
         case .usage:
             UsageBarsCard(state: state, report: report, colors: colors, exact: exact, settings: settings)
         case .calendar:

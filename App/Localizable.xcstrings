@@ -122,6 +122,28 @@
         }
       }
     },
+    "%@ msgs": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ 条"
+          }
+        }
+      }
+    },
+    "%@ of today": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "占今日 %@"
+          }
+        }
+      }
+    },
     "%@ settings": {
       "extractionState": "manual",
       "localizations": {
@@ -151,17 +173,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "%@合计 · 其中 %@ 来自缓存"
-          }
-        }
-      }
-    },
-    "%@ vs. this time yesterday": {
-      "extractionState": "manual",
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "较昨日同时 %@"
           }
         }
       }
@@ -250,17 +261,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "%@ · 平均每天"
-          }
-        }
-      }
-    },
-    "%@×": {
-      "extractionState": "manual",
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ 倍"
           }
         }
       }
@@ -356,6 +356,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "%lld 小时前"
+          }
+        }
+      }
+    },
+    "%lld min": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld 分"
+          }
+        }
+      }
+    },
+    "%lld min %lld s": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld 分 %lld 秒"
           }
         }
       }
@@ -520,6 +542,17 @@
         }
       }
     },
+    "%lld s": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld 秒"
+          }
+        }
+      }
+    },
     "%lld tools with usage": {
       "extractionState": "manual",
       "localizations": {
@@ -560,6 +593,28 @@
         }
       }
     },
+    "%lld%% ahead": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "快 %lld%%"
+          }
+        }
+      }
+    },
+    "%lld%% behind": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "慢 %lld%%"
+          }
+        }
+      }
+    },
     "%lld-day window": {
       "extractionState": "manual",
       "localizations": {
@@ -589,6 +644,61 @@
           "stringUnit": {
             "state": "translated",
             "value": "%lld 分钟窗口"
+          }
+        }
+      }
+    },
+    "%lldd": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld天"
+          }
+        }
+      }
+    },
+    "%lldd %lldh": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld天%lld小时"
+          }
+        }
+      }
+    },
+    "%lldh": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld小时"
+          }
+        }
+      }
+    },
+    "%lldh %lldm": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld小时%lld分"
+          }
+        }
+      }
+    },
+    "%lldm": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld分钟"
           }
         }
       }
@@ -703,6 +813,17 @@
         }
       }
     },
+    "A ribbon runs from each tool to every model it used, as thick as the tokens it carried.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "每条色带从一个工具连到它用过的模型，粗细对应所用的 tokens。"
+          }
+        }
+      }
+    },
     "Active days": {
       "extractionState": "manual",
       "localizations": {
@@ -721,17 +842,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "有用量 · 共 %lld 天"
-          }
-        }
-      }
-    },
-    "Active-day avg": {
-      "extractionState": "manual",
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "活跃日均"
           }
         }
       }
@@ -846,28 +956,6 @@
         }
       }
     },
-    "At this pace, ~%@ by reset · %@": {
-      "extractionState": "manual",
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "按当前速度，重置前约用到 %@ · %@"
-          }
-        }
-      }
-    },
-    "Average": {
-      "extractionState": "manual",
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "平均"
-          }
-        }
-      }
-    },
     "Average daily usage by weekday; the tallest bar is the busiest weekday.": {
       "extractionState": "manual",
       "localizations": {
@@ -912,13 +1000,13 @@
         }
       }
     },
-    "Avg per day": {
+    "Avg per 30 min %@": {
       "extractionState": "manual",
       "localizations": {
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "平均每天"
+            "value": "每 30 分钟平均 %@"
           }
         }
       }
@@ -1062,17 +1150,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "按厂商"
-          }
-        }
-      }
-    },
-    "Cache hit rate · %@": {
-      "extractionState": "manual",
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@缓存命中率"
           }
         }
       }
@@ -1264,6 +1341,17 @@
         }
       }
     },
+    "Click to focus on %@": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "点击突出显示 %@"
+          }
+        }
+      }
+    },
     "Click to refresh all data now (⌘R)": {
       "extractionState": "manual",
       "localizations": {
@@ -1271,6 +1359,17 @@
           "stringUnit": {
             "state": "translated",
             "value": "点击立即刷新全部数据（⌘R）"
+          }
+        }
+      }
+    },
+    "Click to show every series again": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "点击恢复显示全部"
           }
         }
       }
@@ -1363,6 +1462,17 @@
         }
       }
     },
+    "Compared with last month through the same day": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "与上月截至同一天相比"
+          }
+        }
+      }
+    },
     "Cost": {
       "extractionState": "manual",
       "localizations": {
@@ -1429,17 +1539,6 @@
         }
       }
     },
-    "Cumulative": {
-      "extractionState": "manual",
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "累计"
-          }
-        }
-      }
-    },
     "Cumulative line": {
       "extractionState": "manual",
       "localizations": {
@@ -1447,28 +1546,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "累计曲线"
-          }
-        }
-      }
-    },
-    "Cumulative so far": {
-      "extractionState": "manual",
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "累计到此"
-          }
-        }
-      }
-    },
-    "Current streak": {
-      "extractionState": "manual",
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "当前连续"
           }
         }
       }
@@ -1583,39 +1660,6 @@
         }
       }
     },
-    "Date": {
-      "extractionState": "manual",
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "日期"
-          }
-        }
-      }
-    },
-    "Day": {
-      "extractionState": "manual",
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "日"
-          }
-        }
-      }
-    },
-    "Day %lld": {
-      "extractionState": "manual",
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%lld 日"
-          }
-        }
-      }
-    },
     "Day total so far": {
       "extractionState": "manual",
       "localizations": {
@@ -1682,13 +1726,24 @@
         }
       }
     },
-    "Est. %@ · %@": {
+    "Each tile is a model, as large as its tokens, next to the other models of its vendor.": {
       "extractionState": "manual",
       "localizations": {
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "预计 %@ · %@"
+            "value": "每个方块是一个模型，面积对应它的 tokens，同一厂商的模型排在一起。"
+          }
+        }
+      }
+    },
+    "Even pace": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "相对匀速"
           }
         }
       }
@@ -1755,6 +1810,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "首次写入缓存，略贵于输入"
+          }
+        }
+      }
+    },
+    "Flow": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "流向"
+          }
+        }
+      }
+    },
+    "From cache": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "来自缓存"
           }
         }
       }
@@ -1869,17 +1946,6 @@
         }
       }
     },
-    "Hour": {
-      "extractionState": "manual",
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "时"
-          }
-        }
-      }
-    },
     "Hourly": {
       "extractionState": "manual",
       "localizations": {
@@ -1887,6 +1953,17 @@
           "stringUnit": {
             "state": "translated",
             "value": "每小时"
+          }
+        }
+      }
+    },
+    "Hourly avg %@": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "每小时平均 %@"
           }
         }
       }
@@ -2246,6 +2323,17 @@
         }
       }
     },
+    "Last month, same day": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "上月同日累计"
+          }
+        }
+      }
+    },
     "Last used": {
       "extractionState": "manual",
       "localizations": {
@@ -2378,17 +2466,6 @@
         }
       }
     },
-    "Loading": {
-      "extractionState": "manual",
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "正在读取"
-          }
-        }
-      }
-    },
     "Loading limits": {
       "extractionState": "manual",
       "localizations": {
@@ -2462,6 +2539,17 @@
           "stringUnit": {
             "state": "translated",
             "value": "主窗口"
+          }
+        }
+      }
+    },
+    "Marker = even pace": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "标记 = 匀速位置"
           }
         }
       }
@@ -2561,17 +2649,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "模型"
-          }
-        }
-      }
-    },
-    "Model count": {
-      "extractionState": "manual",
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "模型数"
           }
         }
       }
@@ -2719,6 +2796,17 @@
         }
       }
     },
+    "Next reset": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "下次重置"
+          }
+        }
+      }
+    },
     "No messages in range": {
       "extractionState": "manual",
       "localizations": {
@@ -2737,6 +2825,17 @@
           "stringUnit": {
             "state": "translated",
             "value": "还没有记录"
+          }
+        }
+      }
+    },
+    "No tool and model breakdown in this range": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "区间内没有工具与模型的对应数据"
           }
         }
       }
@@ -2781,6 +2880,17 @@
           "stringUnit": {
             "state": "translated",
             "value": "这一天没有用量"
+          }
+        }
+      }
+    },
+    "No usage this week": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "这一周没有用量"
           }
         }
       }
@@ -2928,6 +3038,17 @@
         }
       }
     },
+    "On pace": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "持平"
+          }
+        }
+      }
+    },
     "On pace for about %lld%% by reset": {
       "extractionState": "manual",
       "localizations": {
@@ -3005,17 +3126,6 @@
         }
       }
     },
-    "Output %@ · new input %@": {
-      "extractionState": "manual",
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "输出 %@ · 新输入 %@"
-          }
-        }
-      }
-    },
     "Panel": {
       "extractionState": "manual",
       "localizations": {
@@ -3071,13 +3181,13 @@
         }
       }
     },
-    "Per message": {
+    "Per 1M tokens": {
       "extractionState": "manual",
       "localizations": {
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "每条"
+            "value": "每百万 tokens"
           }
         }
       }
@@ -3115,13 +3225,13 @@
         }
       }
     },
-    "Position": {
+    "Plan": {
       "extractionState": "manual",
       "localizations": {
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "位置"
+            "value": "套餐"
           }
         }
       }
@@ -3199,17 +3309,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "预计月末 %@"
-          }
-        }
-      }
-    },
-    "Projected vs last month": {
-      "extractionState": "manual",
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "预计较上月"
           }
         }
       }
@@ -3423,6 +3522,17 @@
         }
       }
     },
+    "Resets in %@": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@后重置"
+          }
+        }
+      }
+    },
     "Restore automatic color": {
       "extractionState": "manual",
       "localizations": {
@@ -3496,39 +3606,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "去年同期对照线"
-          }
-        }
-      }
-    },
-    "Same point last year": {
-      "extractionState": "manual",
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "去年同期同位置"
-          }
-        }
-      }
-    },
-    "Same point previous period": {
-      "extractionState": "manual",
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "上一周期同位置"
-          }
-        }
-      }
-    },
-    "Same point yesterday (even pace)": {
-      "extractionState": "manual",
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "昨天（匀速）同位置"
           }
         }
       }
@@ -3650,6 +3727,17 @@
           "stringUnit": {
             "state": "translated",
             "value": "占比依据"
+          }
+        }
+      }
+    },
+    "Share of %@": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "占 %@ 的比例"
           }
         }
       }
@@ -3841,6 +3929,17 @@
         }
       }
     },
+    "So far": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "累计到此"
+          }
+        }
+      }
+    },
     "Sparklines": {
       "extractionState": "manual",
       "localizations": {
@@ -3848,17 +3947,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "迷你走势"
-          }
-        }
-      }
-    },
-    "Spent": {
-      "extractionState": "manual",
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "已花"
           }
         }
       }
@@ -4061,17 +4149,6 @@
         }
       }
     },
-    "This day": {
-      "extractionState": "manual",
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "当天"
-          }
-        }
-      }
-    },
     "This day: %@": {
       "extractionState": "manual",
       "localizations": {
@@ -4079,17 +4156,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "当天 %@"
-          }
-        }
-      }
-    },
-    "This half-hour": {
-      "extractionState": "manual",
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "这个时段"
           }
         }
       }
@@ -4149,17 +4215,6 @@
         }
       }
     },
-    "This slot": {
-      "extractionState": "manual",
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "这个时段"
-          }
-        }
-      }
-    },
     "Thresholds": {
       "extractionState": "manual",
       "localizations": {
@@ -4167,39 +4222,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "提醒线"
-          }
-        }
-      }
-    },
-    "Tick = even pace": {
-      "extractionState": "manual",
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "竖线 = 匀速位置"
-          }
-        }
-      }
-    },
-    "Tick = where even use until the reset would be": {
-      "extractionState": "manual",
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "竖线 = 匀速用到重置时应在的位置"
-          }
-        }
-      }
-    },
-    "Time": {
-      "extractionState": "manual",
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "时间"
           }
         }
       }
@@ -4457,13 +4479,24 @@
         }
       }
     },
-    "Total": {
+    "Top share": {
       "extractionState": "manual",
       "localizations": {
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "合计"
+            "value": "最高占比"
+          }
+        }
+      }
+    },
+    "Top tool": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "主力工具"
           }
         }
       }
@@ -4600,17 +4633,6 @@
         }
       }
     },
-    "Updating": {
-      "extractionState": "manual",
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "刷新中"
-          }
-        }
-      }
-    },
     "Usage": {
       "extractionState": "manual",
       "localizations": {
@@ -4633,6 +4655,17 @@
         }
       }
     },
+    "Usage map": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "用量地图"
+          }
+        }
+      }
+    },
     "Used": {
       "extractionState": "manual",
       "localizations": {
@@ -4651,17 +4684,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "主图、柱状图、统计块跟随"
-          }
-        }
-      }
-    },
-    "Value": {
-      "extractionState": "manual",
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "值"
           }
         }
       }
@@ -4776,17 +4798,6 @@
         }
       }
     },
-    "Window just started · %@": {
-      "extractionState": "manual",
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "窗口刚开始 · %@"
-          }
-        }
-      }
-    },
     "With nothing selected, only the icon is shown. ⌥-click the menu bar icon to open the other view; right-click to refresh or quit.": {
       "extractionState": "manual",
       "localizations": {
@@ -4816,6 +4827,17 @@
           "stringUnit": {
             "state": "translated",
             "value": "今年以来"
+          }
+        }
+      }
+    },
+    "Yesterday": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "昨天"
           }
         }
       }
@@ -4975,17 +4997,6 @@
         }
       }
     },
-    "vs daily avg": {
-      "extractionState": "manual",
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "日均的"
-          }
-        }
-      }
-    },
     "vs previous period": {
       "extractionState": "manual",
       "localizations": {
@@ -5015,6 +5026,17 @@
           "stringUnit": {
             "state": "translated",
             "value": "对比昨天"
+          }
+        }
+      }
+    },
+    "vs. this time yesterday": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "较昨日同一时间"
           }
         }
       }
@@ -5059,28 +5081,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "每条约 %@ tokens"
-          }
-        }
-      }
-    },
-    "· Last month %@": {
-      "extractionState": "manual",
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "· 上月 %@"
-          }
-        }
-      }
-    },
-    "· Projected %@": {
-      "extractionState": "manual",
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "· 预计月末 %@"
           }
         }
       }

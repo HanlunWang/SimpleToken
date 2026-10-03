@@ -3,10 +3,10 @@ import Core
 import DesignSystem
 
 // Shared widget layout. Every widget has the same structure:
-//   a header row (accent icon + grey title + trailing note + settings button)
-//   the main number right below the header, top-aligned
+//   a header row (icon in a tinted chip + grey title + trailing note + settings button)
+//   the main number right below the header, top-aligned, in rounded numerals
 //   the visualisation fills the remaining space; large sizes add a row of facts at the bottom
-// Font sizes follow one table per size; padding is uniform.
+// Font sizes follow one table per size; padding is uniform. Charts come from ChartKit.
 
 enum WidgetStyle {
     static let padding: CGFloat = 14
@@ -40,13 +40,15 @@ struct WidgetHeader<Trailing: View>: View {
     }
 
     var body: some View {
-        HStack(spacing: 6) {
+        HStack(spacing: 7) {
             if let icon {
-                Image(systemName: icon).font(.app(Typo.small + 1, .semibold)).foregroundStyle(tint)
-                    .frame(width: 14)
+                Image(systemName: icon).font(.app(Typo.small, .semibold)).foregroundStyle(tint)
+                    .frame(width: 20, height: 20)
+                    .background(ChipBackground(tint == .secondary ? nil : tint, radius: 6))
             }
+            // The title may shrink a little, then truncate, so the settings button always stays inside the card
             Text(title).font(.app(Typo.title, .semibold)).foregroundStyle(.secondary)
-                .lineLimit(1).fixedSize().layoutPriority(2)
+                .lineLimit(1).minimumScaleFactor(0.85).layoutPriority(2)
             Spacer(minLength: 6)
             trailing
                 .font(.app(Typo.small)).foregroundStyle(.tertiary).monospacedDigit()
@@ -83,17 +85,17 @@ struct BigNumber: View {
         let parts = Self.split(text)
         HStack(alignment: .lastTextBaseline, spacing: 3) {
             Text(parts.0)
-                .font(.app(size, .semibold))
+                .font(.num(size, .semibold))
                 .kerning(size > 30 ? -0.8 : -0.4)
                 .foregroundStyle(color)
                 .contentTransition(value.map { .numericText(value: $0) } ?? .numericText())
             if !parts.1.isEmpty {
-                Text(parts.1).font(.app(max(Typo.body, size * 0.42), .medium)).foregroundStyle(.tertiary)
+                Text(parts.1).font(.num(max(Typo.body, size * 0.42), .medium)).foregroundStyle(.tertiary)
             }
         }
         .monospacedDigit()
         .lineLimit(1)
-        .minimumScaleFactor(0.55)
+        .minimumScaleFactor(0.4)
     }
 
     /// Splits number and unit: "52.14 B", "23.4 M", "12.3 K" (and the Chinese 100M / 10K / day units);
@@ -114,7 +116,7 @@ struct Fact: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 1) {
-            Text(value).font(.app(Typo.title + 1, .semibold)).foregroundStyle(color).monospacedDigit()
+            Text(value).font(.num(Typo.title + 1, .semibold)).foregroundStyle(color).monospacedDigit()
                 .lineLimit(1).minimumScaleFactor(0.7)
             Text(label).font(.app(Typo.small)).foregroundStyle(.tertiary).lineLimit(1)
         }
@@ -146,87 +148,80 @@ struct FactsRow: View {
     }
 }
 
-/// Concentric rings (small limits widget): outside in, one fraction per ring
-struct ConcentricRings: View {
-    let rings: [(fraction: Double, color: Color)]
-    var lineWidth: CGFloat = 7
-    var spacing: CGFloat = 2.5
-    @State private var appeared = false
+/// A dollar amount as the main number: a small raised sign, large dollars, small cents
+struct MoneyNumber: View {
+    let amount: Double
+    let size: CGFloat
+    var color: Color = .primary
+
+    init(_ amount: Double, size: CGFloat, color: Color = .primary) {
+        self.amount = amount
+        self.size = size
+        self.color = color
+    }
 
     var body: some View {
-        GeometryReader { geo in
-            let side = min(geo.size.width, geo.size.height)
-            ZStack {
-                ForEach(Array(rings.enumerated()), id: \.offset) { i, ring in
-                    let inset = CGFloat(i) * (lineWidth + spacing) + lineWidth / 2
-                    let d = max(0, side - inset * 2)
-                    Circle().stroke(Color.white.opacity(0.07), lineWidth: lineWidth).frame(width: d, height: d)
-                    Circle()
-                        .trim(from: 0, to: appeared ? max(ring.fraction, ring.fraction > 0 ? 0.015 : 0) : 0)
-                        .stroke(ring.color, style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
-                        .rotationEffect(.degrees(-90))
-                        .frame(width: d, height: d)
+        let text = Fmt.money(amount)
+        // "$1,234.56" → sign, whole, fraction; anything else (other currencies, "—") is drawn as is
+        let parts = Self.split(text)
+        HStack(alignment: .firstTextBaseline, spacing: 1) {
+            if let parts {
+                Text(parts.sign).font(.num(size * 0.55, .semibold)).foregroundStyle(.secondary)
+                    .baselineOffset(size * 0.32)
+                Text(parts.whole).font(.num(size, .semibold)).kerning(size > 30 ? -0.8 : -0.4).foregroundStyle(color)
+                    .contentTransition(.numericText(value: amount))
+                if !parts.fraction.isEmpty {
+                    Text(parts.fraction).font(.num(size * 0.5, .medium)).foregroundStyle(.tertiary)
                 }
+            } else {
+                Text(text).font(.num(size, .semibold)).foregroundStyle(color).contentTransition(.numericText(value: amount))
             }
-            .frame(width: geo.size.width, height: geo.size.height)
         }
-        .aspectRatio(1, contentMode: .fit)
-        .onAppear { withAnimation(.smooth(duration: 1.0)) { appeared = true } }
-        .animation(.smooth(duration: 0.6), value: rings.map(\.fraction))
+        .monospacedDigit()
+        .lineLimit(1)
+        .minimumScaleFactor(0.4)
+    }
+
+    static func split(_ text: String) -> (sign: String, whole: String, fraction: String)? {
+        guard let first = text.first, !first.isNumber else { return nil }
+        let rest = text.dropFirst()
+        guard let digit = rest.first, digit.isNumber else { return nil }
+        // Under a dollar the cents are the number: keep every digit large
+        if rest.hasPrefix("0"), rest.count > 1 { return (String(first), String(rest), "") }
+        if let dot = rest.lastIndex(where: { $0 == "." || $0 == "," }), rest[rest.index(after: dot)...].allSatisfy(\.isNumber),
+           rest.distance(from: rest.index(after: dot), to: rest.endIndex) == 2 {
+            return (String(first), String(rest[..<dot]), String(rest[dot...]))
+        }
+        return (String(first), String(rest), "")
     }
 }
 
-/// Donut chart (models, token composition): sectors + centre content, hover by angle
-struct DonutChart<Center: View>: View {
-    let parts: [(key: String, value: Double, color: Color)]
-    var inner: CGFloat = 0.68
-    var hovered: String?
-    var onHover: ((String?, CGPoint?) -> Void)?
-    @ViewBuilder var center: Center
+/// Change against the previous period, as a small tinted chip ("▲ 12.3%")
+struct DeltaChip: View {
+    let percent: Double
+    /// Whether a rise is good news (usage: neutral; cost: a rise is bad)
+    var invert = false
 
     var body: some View {
-        let total = max(1e-9, parts.reduce(0) { $0 + $1.value })
-        ZStack {
-            Canvas { ctx, size in
-                let side = min(size.width, size.height)
-                let c = CGPoint(x: size.width / 2, y: size.height / 2)
-                var start = -90.0
-                let gap = parts.count > 1 ? 1.6 : 0
-                for p in parts where p.value > 0 {
-                    let sweep = p.value / total * 360
-                    let hot = hovered == nil || hovered == p.key
-                    let outer = side / 2 * (hovered == p.key ? 1 : 0.94)
-                    var path = Path()
-                    path.addArc(center: c, radius: outer, startAngle: .degrees(start + gap / 2),
-                                endAngle: .degrees(start + max(gap / 2 + 0.5, sweep - gap / 2)), clockwise: false)
-                    path.addArc(center: c, radius: side / 2 * inner, startAngle: .degrees(start + max(gap / 2 + 0.5, sweep - gap / 2)),
-                                endAngle: .degrees(start + gap / 2), clockwise: true)
-                    path.closeSubpath()
-                    ctx.fill(path, with: .color(p.color.opacity(hot ? 1 : 0.4)))
-                    start += sweep
-                }
-            }
-            center
+        let flat = abs(percent) < 0.5
+        let up = percent > 0
+        let color: Color = flat ? Palette.mono(0.6) : ((up != invert) ? Palette.up : Palette.down)
+        HStack(spacing: 3) {
+            Image(systemName: flat ? "minus" : up ? "arrow.up.right" : "arrow.down.right")
+                .font(.system(size: Typo.axis - 1.5, weight: .bold))
+            Text(String(format: "%.1f%%", abs(percent))).font(.num(Typo.small, .semibold))
         }
-        .aspectRatio(1, contentMode: .fit)
-        .overlay {
-            GeometryReader { geo in
-                Color.clear.contentShape(Circle())
-                    .onContinuousHover(coordinateSpace: .local) { phase in
-                        guard case .active(let p) = phase else { onHover?(nil, nil); return }
-                        let c = CGPoint(x: geo.size.width / 2, y: geo.size.height / 2)
-                        let dx = p.x - c.x, dy = p.y - c.y
-                        let r = hypot(dx, dy), outer = min(geo.size.width, geo.size.height) / 2
-                        guard r > outer * (inner - 0.06), r < outer * 1.02 else { onHover?(nil, nil); return }
-                        var angle = atan2(dx, -dy)
-                        if angle < 0 { angle += 2 * .pi }
-                        var acc = 0.0
-                        let target = angle / (2 * .pi) * total
-                        let hit = parts.first { acc += $0.value; return target <= acc }
-                        let origin = geo.frame(in: .named(HoverTip.space)).origin
-                        onHover?(hit?.key, CGPoint(x: origin.x + p.x, y: origin.y + p.y))
-                    }
-            }
-        }
+        .monospacedDigit()
+        .foregroundStyle(color)
+        .padding(.horizontal, 7).padding(.vertical, 2.5)
+        .background(ChipBackground(flat ? nil : color, radius: 7))
+        .lineLimit(1).fixedSize()
     }
+}
+
+/// A fraction as a whole-number percentage ("12%"); under 1% keeps one decimal
+func percent(_ fraction: Double) -> String {
+    let p = fraction * 100
+    if p > 0, p < 1 { return String(format: "%.1f%%", p) }
+    return String(format: "%.0f%%", p)
 }

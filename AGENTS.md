@@ -29,11 +29,11 @@ English is the source language. Strings reach the UI through SwiftUI `LocalizedS
 - Model colour slots follow the trailing-30-day ranking (`AppState.modelColors`), never the selected range.
 - Token numbers honour the short/exact toggle everywhere except axis ticks (always short).
 - Settings live inside the main window (`AppState.showingSettings` → `SettingsPage`), not a separate window. Widget options are on the back face (`FlipCard` + `CardBack`).
-- The dashboard is a widget grid (`WidgetGrid`): fixed 150 pt rows, an even number of ≥160 pt columns (2–8) chosen from the window width, dense first-fit packing. Every widget is a `SettingsStore.Card` (each stat is its own `stat.*` widget) with its own allowed `sizes` (small 1×1, medium 2×1, large 2×2, wide 4×2; wide falls back to large at 2 columns) and a distinct layout per size read from `\.cardSize`. Shared widget anatomy lives in `WidgetParts.swift` (`WidgetHeader`, `BigNumber` sized by `WidgetStyle.number`, `FactsRow`, `DonutChart`, `ConcentricRings`): header, then the main number top-aligned, then the visual; large sizes end with a facts row. Widgets are dragged in place (`CardDrag`, `DraggableCard`: floating copy over a dashed slot). Card backs scroll inside the fixed cell.
+- The dashboard is a widget grid (`WidgetGrid`): fixed 150 pt rows, an even number of ≥160 pt columns (2–8) chosen from the window width, dense first-fit packing. Every widget is a `SettingsStore.Card` (each stat is its own `stat.*` widget) with its own allowed `sizes` (small 1×1, medium 2×1, large 2×2, wide 4×2; wide falls back to large at 2 columns) and a distinct layout per size read from `\.cardSize`. Shared widget anatomy lives in `WidgetParts.swift` (`WidgetHeader` with a tinted icon chip, `BigNumber` / `MoneyNumber` in rounded numerals sized by `WidgetStyle.number`, `FactsRow`, `DeltaChip`): header, then the main number top-aligned, then the visual; large sizes end with a facts row. Widgets are dragged in place (`CardDrag`, `DraggableCard`: floating copy over a dashed slot). Card backs scroll inside the fixed cell.
 - Brand logos are mono SVGs from yldm-tech/ai-logo in `DesignSystem/Resources/logos`, always tinted by the UI (`EntityMark`, `BrandBadge`), never brand-coloured. Normalise SVG path data when adding one (CoreSVG mis-parses compact arc flags).
 - Settings are tabbed (`SettingsTab`, `AppState.settingsTabKey`). Limit alerts: `LimitNotifier` posts once per window period per threshold; it needs a bundle id.
 - The menu bar item is one image drawn by `MenuBarRenderer` (styles: single line, two-line, ring, bar; items from `SettingsStore.menuBarItems`). Template image unless a value is over the alert threshold.
-- Hover readouts go through `HoverTip` (drawn above all cards in the dashboard coordinate space). Charts use `.chartHover` / `.dashboardHover`.
+- Every chart comes from `ChartKit.swift` (no Swift Charts): Canvas marks in the depth look (rounded, lit top-left, grooves: `Depth`, `GraphicsContext.column/cell/dot`) that morph via `Animatable` + `AnimatableVector`; `Motion.data` / `Motion.hover` honour reduce-motion; `Entrance` grow-in is off for the drag copy. Hover readouts are `TipCard`s through `HoverTip.show(id, key:, at:, glide:)`, drawn above all cards in the dashboard coordinate space.
 - The top bar is a ZStack overlay with `TopBarScrim` (material + gradient mask), content inset via `safeAreaPadding`. Do not switch back to `safeAreaBar`: on macOS it draws its own hard-edged bar background.
 - Excluded models / tools (`SettingsStore.usageFilter`) apply to every derived number: history summaries are filtered per observation, live periods via `UsagePeriod.byPair` (client × model slices).
 
@@ -43,12 +43,11 @@ Measured on the Release build (2026-09-29): ~110 MB footprint with the window op
 
 - Each tokscale scan costs ~1.2 CPU-s and a ~570 MB child process. Watch ticks are **throttled** (`liveRefreshSeconds`, default 30 s; throttle, not debounce), full rescans run every `fullRefreshMinutes` (15), and live updates pause when neither the window nor the panel is visible and the menu bar does not show today's numbers.
 - **Never put scroll offsets in dashboard state.** They live in `ScrollTracker` (read only by the top-bar scrim and the hover-tip layer). Hover is ignored mid-scroll (`HoverTip.scrolling`).
-- In Swift Charts, `BarMark` on a numeric x axis draws nothing here; use `RectangleMark(xStart:xEnd:yStart:yEnd:)`.
 - The main window and drop-down panel **drop their SwiftUI hierarchy when closed** and rebuild on show; hidden views would otherwise keep re-rendering on every data change.
 - Dense grids (calendar, punchcard, active-day strip) draw with `Canvas` and hit-test by coordinates. Do not go back to one view per cell.
 - Never create `DateFormatter` / `NumberFormatter` / `ISO8601DateFormatter` in render or per-line paths (ICU init is expensive): use the cached ones in `Fmt`. The intraday scanner parses timestamps by hand.
 - Only a manual refresh spins the top-bar refresh icon. Background ticks and limit-probe retries must not drive continuous animations.
-- `AppState.report(range:metric:)` and `modelColors` are memoized on a data-version key; derive new views from them rather than recomputing `RangeAnalytics` in bodies.
+- `AppState.report(range:metric:)`, `pairs(for:)` (tool × model tokens for the map and flow widgets) and `modelColors` are memoized on a data-version key; derive new views from them rather than recomputing `RangeAnalytics` in bodies.
 
 ## Data sources and gotchas
 

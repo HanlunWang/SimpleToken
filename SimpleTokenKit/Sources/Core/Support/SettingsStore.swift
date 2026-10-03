@@ -235,7 +235,7 @@ public final class SettingsStore {
         case hero
         case statAverage = "stat.average", statPeak = "stat.peak", statActive = "stat.active", statPerMillion = "stat.perMillion"
         case statTotalCost = "stat.totalCost", statMessages = "stat.messages", statTopModel = "stat.topModel", statWeekday = "stat.weekday"
-        case limits, models, usage, calendar, punchcard, tools, composition, cost
+        case limits, models, map, flow, usage, calendar, punchcard, tools, composition, cost
         public var id: String { rawValue }
 
         /// Stat id of a stat widget (average / peak …); nil for other widgets
@@ -260,6 +260,8 @@ public final class SettingsStore {
             case .statWeekday: L("Busiest weekday")
             case .limits: L("Limits")
             case .models: L("Models")
+            case .map: L("Usage map")
+            case .flow: L("Flow")
             case .usage: L("Usage chart")
             case .calendar: L("Calendar")
             case .punchcard: L("Time of day")
@@ -281,6 +283,8 @@ public final class SettingsStore {
             case .statWeekday: "calendar.day.timeline.left"
             case .limits: "gauge.with.dots.needle.50percent"
             case .models: "chart.pie"
+            case .map: "rectangle.split.2x2.fill"
+            case .flow: "arrow.triangle.branch"
             case .usage: "chart.bar.fill"
             case .calendar: "square.grid.3x3.square"
             case .punchcard: "circle.grid.3x3"
@@ -293,6 +297,7 @@ public final class SettingsStore {
         public var sizes: [CardSize] {
             switch self {
             case .hero, .usage: [.medium, .large, .wide]
+            case .map, .flow: [.medium, .large, .wide]
             case .calendar: [.medium, .large, .wide]
             case .punchcard: [.medium, .large, .wide]
             case .cost: [.small, .medium, .large, .wide]
@@ -303,7 +308,7 @@ public final class SettingsStore {
         public var defaultSize: CardSize {
             switch self {
             case .hero, .usage, .cost: .wide
-            case .limits, .models, .calendar, .punchcard: .large
+            case .limits, .models, .map, .flow, .calendar, .punchcard: .large
             case .tools, .composition: .medium
             default: .small
             }

@@ -152,6 +152,37 @@ public final class AppState {
         return history.daily.last { $0.date == key } ?? .init(date: key)
     }
 
+    /// Tokens per (tool, model) pair over a report's days: today from the live snapshot, earlier days from the
+    /// archive's observations. Feeds the flow and map widgets. Memoized with the reports.
+    public func pairs(for report: RangeReport) -> [(client: String, model: String, tokens: Int)] {
+        let key = "pairs|\(report.range.rawValue)|\(dataKey)"
+        if let cached = pairsCache[key] { return cached }
+        let filter = self.filter
+        let todayKey = Fmt.dayKey()
+        var sums: [String: [String: Int]] = [:]
+        for day in report.days {
+            if day.date == todayKey, let today = usage.snapshot?.today {
+                for (pair, slice) in filter.apply(today).byPair where slice.tokens > 0 {
+                    let (client, model) = UsagePeriod.splitPair(pair)
+                    sums[client, default: [:]][model, default: 0] += slice.tokens
+                }
+                continue
+            }
+            guard let archived = history.archive.days[day.date] else { continue }
+            for o in archived.observations.values where o.tokens > 0 {
+                guard !filter.excludedClients.contains(o.client), !filter.excludedModels.contains(o.modelId),
+                      !o.modelId.lowercased().contains("synthetic") else { continue }
+                sums[o.client, default: [:]][o.modelId, default: 0] += o.tokens
+            }
+        }
+        let out = sums.flatMap { client, models in models.map { (client: client, model: $0.key, tokens: $0.value) } }
+            .sorted { $0.tokens > $1.tokens }
+        if pairsCache.count > 12 { pairsCache.removeAll() }
+        pairsCache[key] = out
+        return out
+    }
+    @ObservationIgnored private var pairsCache: [String: [(client: String, model: String, tokens: Int)]] = [:]
+
     /// Model colours: ranked by trailing-30-day usage (independent of the selected range; current main models always get a colour)
     public var modelColors: ModelColors {
         let settings = SettingsStore.shared

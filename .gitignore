@@ -5,3 +5,4 @@ SimpleTokenKit/.build/
 xcuserdata/
 *.xcuserstate
 Config/Signing.local.xcconfig
+dist/

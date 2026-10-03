@@ -38,6 +38,14 @@ public enum Palette {
     public static let up = Color(red: 0.50, green: 0.69, blue: 0.54)      // status: increase (with an arrow)
     public static let down = Color(red: 0.79, green: 0.54, blue: 0.48)    // status: decrease (with an arrow)
 
+    /// What a mark turns into when it steps back behind a focused one
+    public static let muted = Color(white: 0.36)
+
+    // Status colours: reserved for state, always shown with an icon and a label
+    public static let good = Color(hex: "#72cf8e")
+    public static let warning = Color(hex: "#e8b45e")
+    public static let critical = Color(hex: "#ea6a66")
+
     public static let ground = Color(red: 0.051, green: 0.051, blue: 0.059)   // #0d0d0f
     public static let track = Color.white.opacity(0.08)
     public static let hairline = Color.white.opacity(0.07)
@@ -143,6 +151,34 @@ public extension Font {
     static func app(_ size: CGFloat, _ weight: Font.Weight = .regular) -> Font {
         .system(size: size, weight: weight)
     }
+
+    /// Numbers: the rounded face, set against the plain face of labels
+    static func num(_ size: CGFloat, _ weight: Font.Weight = .semibold) -> Font {
+        .system(size: size, weight: weight, design: .rounded)
+    }
+}
+
+public extension Color {
+    /// A clearly lighter step of the same hue: icons and lines that must stand out on a chip or a card
+    var lighter: Color { shade(1) }
+
+    /// A slightly lighter step of the same hue: the lit end of a fill. Fills are nearly flat.
+    var lit: Color {
+        guard let c = NSColor(self).usingColorSpace(.sRGB) else { return self }
+        var h: CGFloat = 0, s: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+        c.getHue(&h, saturation: &s, brightness: &b, alpha: &a)
+        return Color(hue: h, saturation: max(0.05, s - 0.035), brightness: min(1, b + 0.055))
+    }
+
+    /// Top-to-bottom fill for a bar or area in this hue: a touch lighter at the top
+    var fill: LinearGradient {
+        LinearGradient(colors: [lit, self], startPoint: .top, endPoint: .bottom)
+    }
+
+    /// Left-to-right fill for a horizontal bar
+    var fillAcross: LinearGradient {
+        LinearGradient(colors: [self, lit], startPoint: .leading, endPoint: .trailing)
+    }
 }
 
 // MARK: - Glass card (native Liquid Glass; optionally with a faint purpose tint)
@@ -152,10 +188,16 @@ public struct GlassCard: ViewModifier {
     var radius: CGFloat
     var tint: Color?
 
+    /// Layout audits set SIMPLETOKEN_LAYOUT_DEBUG=1 to see overflowing content instead of clipping it
+    private static let showOverflow = ProcessInfo.processInfo.environment["SIMPLETOKEN_LAYOUT_DEBUG"] == "1"
+
     public func body(content: Content) -> some View {
         content
             .padding(padding)
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            // minWidth / minHeight 0: the card always takes exactly the size it is given, never its content's
+            .frame(minWidth: 0, maxWidth: .infinity, minHeight: 0, maxHeight: .infinity, alignment: .topLeading)
+            // Widgets have a fixed height: never let content spill onto the next widget
+            .clipShape(RoundedRectangle(cornerRadius: Self.showOverflow ? 0 : radius, style: .continuous).inset(by: Self.showOverflow ? -2000 : 0))
             .glassEffect(tint.map { .regular.tint($0.opacity(0.10)) } ?? .regular, in: .rect(cornerRadius: radius))
     }
 }
@@ -289,7 +331,33 @@ public struct Swatch: View {
         self.size = size
     }
     public var body: some View {
-        RoundedRectangle(cornerRadius: 2).fill(color).frame(width: size, height: size)
+        // Lit from the top like the mark it stands for
+        RoundedRectangle(cornerRadius: 2.2, style: .continuous).fill(color.fill).frame(width: size, height: size)
+    }
+}
+
+// MARK: - Icon chip
+
+/// The small rounded square an icon sits on: a wash of its colour, a little stronger at the top, with a
+/// hairline rim. Grey when there is no colour.
+public struct ChipBackground: View {
+    var color: Color?
+    var radius: CGFloat
+
+    public init(_ color: Color?, radius: CGFloat) {
+        self.color = color
+        self.radius = radius
+    }
+
+    public var body: some View {
+        let shape = RoundedRectangle(cornerRadius: radius, style: .continuous)
+        if let color {
+            shape.fill(LinearGradient(colors: [color.opacity(0.34), color.opacity(0.17)], startPoint: .top, endPoint: .bottom))
+                .overlay(shape.strokeBorder(LinearGradient(colors: [color.lighter.opacity(0.35), color.opacity(0.05)], startPoint: .top, endPoint: .bottom), lineWidth: 0.6))
+        } else {
+            shape.fill(LinearGradient(colors: [Color.white.opacity(0.10), Color.white.opacity(0.05)], startPoint: .top, endPoint: .bottom))
+                .overlay(shape.strokeBorder(Color.white.opacity(0.07), lineWidth: 0.6))
+        }
     }
 }
 

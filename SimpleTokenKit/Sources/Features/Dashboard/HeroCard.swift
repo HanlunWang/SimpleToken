@@ -1,33 +1,16 @@
 import SwiftUI
-import Charts
 import Core
 import DesignSystem
 
-/// Resamples a polyline to a fixed number of points evenly spaced on x (linear interpolation).
-/// A fixed count with fixed ids lets Charts morph point by point when the range changes instead of adding / removing points.
-func resampled(_ points: [(x: Double, y: Double)], count: Int) -> [(x: Double, y: Double)] {
-    guard let first = points.first, let last = points.last, count > 1 else { return points }
-    guard points.count > 1 else { return (0..<count).map { _ in (first.x, first.y) } }
-    var out: [(x: Double, y: Double)] = []
-    var j = 1
-    for i in 0..<count {
-        let x = first.x + (last.x - first.x) * Double(i) / Double(count - 1)
-        while j < points.count - 1 && points[j].x < x { j += 1 }
-        let a = points[j - 1], b = points[j]
-        let t = b.x > a.x ? (x - a.x) / (b.x - a.x) : 1
-        out.append((x, a.y + (b.y - a.y) * min(1, max(0, t))))
-    }
-    return out
-}
-
-/// Main chart: cumulative curve over the range + a previous-period comparison line. On hover the big number
-/// shows the cumulative value at that point (Wealthsimple style).
+/// Main chart: the metric adding up over the range, against the period before it (kit `AreaChart`).
+/// Hovering a day shows the total up to it in the big number and the day's own numbers in a readout.
 struct HeroCard: View {
-    struct Point: Identifiable {
-        let id: Int
+    struct Point {
         let x: Double           // 0…1 horizontal position (aligned with the previous period)
         let y: Double           // cumulative value
         let value: Double       // value of that day / time slot
+        /// Day key, or the half-hour's clock time at 1D
+        let key: String
         let label: String
     }
 
@@ -35,33 +18,51 @@ struct HeroCard: View {
     let todayHalfHours: [Int]
     let compact: Bool
     @Bindable var settings: SettingsStore
+    /// Model colours for the hovered day's breakdown; without them the readout stops at the totals
+    var colors: ModelColors? = nil
     @Environment(HoverTip.self) private var tip: HoverTip?
-    @State private var selectedX: Double?
-    @State private var flipped = false
     @Environment(\.cardSize) private var cardSize
+    @State private var selectedIndex: Int?
+    @State private var flipped = false
 
-    private var line: Color { settings.accent("card.hero", .white) }
-
-    private static let samples = 90
+    private static let accentKey = "card.hero"
+    private static let tipID = "hero"
     private var metric: UsageMetric { settings.metric }
+
+    // MARK: Colours
+
+    /// The stored accent; nil is the default, a blue that runs into indigo along the line
+    private var customAccent: Color? {
+        guard let stored = settings.cardAccents[Self.accentKey], !stored.isEmpty else { return nil }
+        return Accent.resolve(stored, fallback: .blue)
+    }
+
+    private var chartColors: (line: [Color], area: [Color]) {
+        if let customAccent { return AreaChart.colors(for: customAccent) }
+        return ([Palette.usage.lit, Accent.indigo.color.lit], [Palette.usage, Accent.indigo.color])
+    }
+
+    /// One colour standing for the series: icon chips, swatches
+    private var accent: Color { customAccent ?? Palette.usage }
 
     // MARK: Data
 
     private var current: [Point] {
         if report.range == .day { return intradayPoints }
         return report.current.map {
-            Point(id: $0.index, x: $0.position, y: $0.cumulative, value: $0.value, label: Fmt.shortDate($0.date))
+            Point(x: $0.position, y: $0.cumulative, value: $0.value, key: $0.date, label: Fmt.shortDate($0.date))
         }
     }
 
-    private var previous: [(x: Double, y: Double)]? {
-        guard settings.heroShowPrevious else { return nil }
+    /// The comparison line; empty when there is none or it is switched off
+    private var previous: [(x: Double, y: Double)] {
+        guard settings.heroShowPrevious else { return [] }
         if report.range == .day {
             // No reliable intraday data for yesterday: draw an even-pace line to yesterday's total
-            guard let total = report.previousTotal else { return nil }
+            guard let total = report.previousTotal, total > 0 else { return [] }
             return [(0, 0), (1, total)]
         }
-        return report.previous?.map { ($0.position, $0.cumulative) }
+        return report.previous?.map { ($0.position, $0.cumulative) } ?? []
     }
 
     /// 1D: shape from the session logs' half-hour distribution, scaled to the live total for today (which every other card uses, so they agree)
@@ -75,18 +76,41 @@ struct HeroCard: View {
         var acc = 0.0
         return buckets.enumerated().map { i, v in
             acc += Double(v) * scale
-            return Point(id: i, x: Double(i + 1) / 48, y: acc, value: Double(v) * scale,
-                         label: String(format: "%d:%02d", i / 2, (i % 2) * 30))
+            let clock = String(format: "%d:%02d", i / 2, (i % 2) * 30)
+            return Point(x: Double(i + 1) / 48, y: acc, value: Double(v) * scale, key: clock, label: clock)
         }
     }
 
-    private var selected: Point? {
-        guard let selectedX else { return nil }
-        return current.min { abs($0.x - selectedX) < abs($1.x - selectedX) }
+    private func selected(in points: [Point]) -> Point? {
+        guard let selectedIndex, points.indices.contains(selectedIndex) else { return nil }
+        return points[selectedIndex]
     }
 
-    private var yMax: Double {
-        max(report.total, previous?.last?.y ?? 0, 1) * 1.08
+    private var selected: Point? { selected(in: current) }
+
+    private func top(_ points: [Point], _ previous: [(x: Double, y: Double)]) -> Double {
+        let peak = max(points.map(\.y).max() ?? 0, previous.map(\.y).max() ?? 0)
+        return (peak > 0 ? peak : (metric == .cost ? 1 : 10)) * 1.05
+    }
+
+    /// Labels under the plot: the range's first, middle and last day (clock times at 1D)
+    private var xLabels: [String] {
+        if report.range == .day { return ["0:00", "12:00", "24:00"] }
+        let days = report.days
+        guard days.count > 1 else { return [] }
+        if days.count == 2 { return [days[0].date, days[1].date].map(Fmt.shortDate) }
+        return [days[0].date, days[days.count / 2].date, days[days.count - 1].date].map(Fmt.shortDate)
+    }
+
+    /// The comparison line's value at the same horizontal position (linear interpolation)
+    private func previousValue(at x: Double, in previous: [(x: Double, y: Double)]) -> Double? {
+        guard let first = previous.first, let last = previous.last else { return nil }
+        if x <= first.x { return first.y }
+        if x >= last.x { return last.y }
+        guard let j = previous.firstIndex(where: { $0.x >= x }), j > 0 else { return first.y }
+        let a = previous[j - 1], b = previous[j]
+        let t = b.x > a.x ? (x - a.x) / (b.x - a.x) : 1
+        return a.y + (b.y - a.y) * t
     }
 
     // MARK: View
@@ -94,10 +118,10 @@ struct HeroCard: View {
     var body: some View {
         FlipCard(flipped: flipped) {
             front
-                .onChange(of: report.range) { selectedX = nil }
-                .onChange(of: report.metric) { selectedX = nil }
+                .onChange(of: report.range) { clearSelection() }
+                .onChange(of: report.metric) { clearSelection() }
         } back: {
-            CardBack(title: L("Main chart · Settings"), accentKey: "card.hero", accentDefault: .white,
+            CardBack(title: L("Main chart · Settings"), accentKey: Self.accentKey, accentDefault: .blue,
                      onHide: { settings.setVisible(.hero, false) }, padding: 14, radius: 18,
                      done: { flipped = false }) {
                 OptionRow(L("Metric")) {
@@ -110,6 +134,11 @@ struct HeroCard: View {
                 Text("Metric and number format apply to all cards.").font(.app(Typo.small)).foregroundStyle(.tertiary)
             }
         }
+    }
+
+    private func clearSelection() {
+        selectedIndex = nil
+        tip?.hide(Self.tipID)
     }
 
     private var front: some View {
@@ -127,159 +156,102 @@ struct HeroCard: View {
         selected.map { L("\($0.label) · Cumulative") } ?? "\(metric.localizedLabel) · \(report.range.localizedLabel)"
     }
 
-    /// Value of the hovered day / half-hour
-    private func pointValueText(_ v: Double, exact: Bool) -> String {
-        let value = Fmt.metric(v, metric, exact: exact)
-        return report.range == .day ? L("This half-hour: \(value)") : L("This day: \(value)")
+    private var header: some View {
+        WidgetHeader(title, icon: SettingsStore.Card.hero.icon, tint: accent, onSettings: { flipped = true })
     }
 
-    private var header: some View {
-        WidgetHeader(title, icon: SettingsStore.Card.hero.icon, onSettings: { flipped = true }) {
-            if cardSize == .wide || cardSize == .large { legend }
+    /// 2×1: header, number row, curve without axes filling the rest
+    private var mediumFront: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            header
+            numberRow(size: WidgetStyle.number(.medium), legend: false)
+            caption
+            chart(axes: false, bars: false)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
     }
 
-    /// 2×1: number top left, curve without axes on the right
-    private var mediumFront: some View {
+    /// 2×2: header, number row, curve with axes and the days' own columns, four facts at the bottom
+    private var largeFront: some View {
         VStack(alignment: .leading, spacing: 6) {
             header
-            HStack(alignment: .top, spacing: 14) {
-                VStack(alignment: .leading, spacing: 5) {
-                    heroNumber(size: WidgetStyle.number(.medium))
-                    if let selected {
-                        Text(pointValueText(selected.value, exact: false))
-                            .font(.app(Typo.small)).foregroundStyle(.secondary)
-                    } else if let change = report.changePercent {
-                        DeltaChip(percent: change)
-                    }
-                    Spacer(minLength: 0)
-                    Text(secondaryTotal).font(.app(Typo.small)).foregroundStyle(.tertiary).monospacedDigit()
-                }
-                .frame(width: 150, alignment: .leading)
-                chart(axes: false)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-            }
-        }
-    }
-
-    /// 2×2: number + comparison, curve with axes below, three facts at the bottom
-    private var largeFront: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            header
-            VStack(alignment: .leading, spacing: 3) {
-                heroNumber(size: WidgetStyle.number(.large))
-                subline
-            }
-            chart(axes: true)
-                .frame(maxHeight: .infinity)
+            numberRow(size: WidgetStyle.number(.large), legend: false)
+            caption
+            chart(axes: true, bars: true)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .padding(.top, 2)
             FactsRow(facts)
         }
     }
 
-    /// 4×2: number and facts in a column on the left, large chart on the right
+    /// 4×2: like large, with the metric switch in the header and a legend at the end of the number row
     private var wideFront: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 8) {
                 header
                 controls
             }
-            HStack(alignment: .top, spacing: 22) {
-                VStack(alignment: .leading, spacing: 4) {
-                    heroNumber(size: WidgetStyle.number(.wide))
-                    subline
-                    Spacer(minLength: 10)
-                    VStack(alignment: .leading, spacing: 10) {
-                        ForEach(Array(facts.enumerated()), id: \.offset) { _, f in
-                            Fact(label: f.0, value: f.1)
-                        }
-                    }
-                }
-                .frame(width: 210, alignment: .leading)
-                chart(axes: true)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-            }
-        }
-    }
-
-    /// Total in the other unit: cost when showing tokens, tokens otherwise
-    private var secondaryTotal: String {
-        metric == .tokens ? L("Cost \(Fmt.money(report.stats.totalCost))")
-            : "\(Fmt.tokens(report.days.reduce(0) { $0 + Double($1.tokens) }, exact: false)) tokens"
-    }
-
-    private var facts: [(String, String)] {
-        let s = report.stats
-        let perDay = report.range == .day ? nil : Fmt.metric(report.total / Double(max(1, s.totalDays)), metric, exact: false)
-        var out: [(String, String)] = []
-        if let perDay { out.append((L("Daily avg"), perDay)) }
-        if let peak = s.peak, report.range != .day {
-            let v: Double = switch metric {
-            case .tokens: Double(peak.tokens)
-            case .cost: peak.cost
-            case .messages: Double(peak.messages)
-            }
-            out.append((L("Peak · \(Fmt.shortDate(peak.date))"), Fmt.metric(v, metric, exact: false)))
-        }
-        if report.range != .day { out.append((L("Active days"), "\(s.activeDays) / \(s.totalDays)")) }
-        out.append((metric == .tokens ? L("Cost") : "Tokens", metric == .tokens ? Fmt.money(s.totalCost)
-                    : Fmt.tokens(report.days.reduce(0) { $0 + Double($1.tokens) }, exact: false)))
-        return Array(out.prefix(cardSize == .wide ? 4 : 3))
-    }
-
-    private func headline(numberSize: CGFloat) -> some View {
-        VStack(alignment: .leading, spacing: 3) {
-            Text(selected.map { L("\($0.label) · Cumulative") } ?? "\(metric.localizedLabel) · \(report.range.localizedLabel)")
-                .font(.app(Typo.body)).foregroundStyle(.secondary)
-                .contentTransition(.opacity)
-            heroNumber(size: numberSize)
-            subline
+            numberRow(size: WidgetStyle.number(.wide), legend: true)
+            caption
+            chart(axes: true, bars: true)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .padding(.top, 2)
+            FactsRow(facts)
         }
     }
 
     /// The front only has the metric switch; short / exact lives on the back and in settings
-    @ViewBuilder private var controls: some View {
+    private var controls: some View {
         GlassSegmented(UsageMetric.allCases.map { ($0, $0.localizedLabel) }, selection: $settings.metric)
+    }
+
+    // MARK: Number
+
+    /// Big number (the total, or the total up to the hovered point) with the change against the previous period beside it
+    private func numberRow(size: CGFloat, legend: Bool) -> some View {
+        HStack(alignment: .lastTextBaseline, spacing: 8) {
+            heroNumber(size: size)
+                .layoutPriority(1)
+            if let change = report.changePercent {
+                DeltaChip(percent: change, invert: metric == .cost)
+                    .opacity(selected == nil ? 1 : 0)
+            }
+            Spacer(minLength: 0)
+            if legend { self.legend }
+        }
     }
 
     private func heroNumber(size: CGFloat) -> some View {
         let value = selected?.y ?? report.total
-        let text = Fmt.metric(value, metric, exact: settings.exactNumbers)
-        return BigNumber(metric == .tokens && !text.contains(" ") ? text + " tokens" : text, size: size, value: value)
-            .animation(.snappy(duration: 0.35), value: value)
-    }
-
-    /// Subline: drops the trailing cost / tokens first when it does not fit, then truncates
-    private var subline: some View {
-        ViewThatFits(in: .horizontal) {
-            sublineContent(withExtra: false).fixedSize()
-            sublineContent(withExtra: false).lineLimit(1).truncationMode(.tail)
-        }
-        .font(.app(Typo.body))
-        .frame(height: 20)
-        .monospacedDigit()
-    }
-
-    private func sublineContent(withExtra: Bool) -> some View {
-        HStack(spacing: 8) {
-            if let selected {
-                Text(pointValueText(selected.value, exact: settings.exactNumbers))
-                    .foregroundStyle(.secondary)
+        return Group {
+            if metric == .cost {
+                MoneyNumber(value, size: size)
             } else {
-                if let change = report.changePercent, let prev = report.previousTotal {
-                    DeltaChip(percent: change)
-                    Text("\(comparisonLabel) \(Fmt.metric(prev, metric, exact: settings.exactNumbers))")
-                        .foregroundStyle(.secondary)
-                } else if report.range == .all, let first = report.days.first {
-                    Text("Since \(Fmt.longDate(first.date))").foregroundStyle(.secondary)
-                }
-                if withExtra {
-                    Text("·").foregroundStyle(.tertiary)
-                    Text(metric == .tokens ? Fmt.money(report.stats.totalCost)
-                                           : Fmt.tokens(report.days.reduce(0) { $0 + Double($1.tokens) }, exact: settings.exactNumbers))
-                        .foregroundStyle(.secondary)
-                }
+                BigNumber(Fmt.metric(value, metric, exact: settings.exactNumbers), size: size, value: value)
             }
         }
+        .animation(.snappy(duration: 0.35), value: value)
+    }
+
+    /// Under the number: the hovered point's own value, else the comparison with the previous period
+    private var caption: some View {
+        Text(captionText)
+            .font(.app(Typo.small)).foregroundStyle(.secondary).monospacedDigit()
+            .lineLimit(1).truncationMode(.tail).minimumScaleFactor(0.85)
+            .frame(height: 14, alignment: .leading)
+            .contentTransition(.opacity)
+    }
+
+    private var captionText: String {
+        if let selected {
+            let value = Fmt.metric(selected.value, metric, exact: settings.exactNumbers)
+            return report.range == .day ? L("This half-hour: \(value)") : L("This day: \(value)")
+        }
+        if let prev = report.previousTotal {
+            return "\(comparisonLabel) \(Fmt.metric(prev, metric, exact: settings.exactNumbers))"
+        }
+        if report.range == .all, let first = report.days.first { return L("Since \(Fmt.longDate(first.date))") }
+        return otherUnitTotal
     }
 
     private var comparisonLabel: String {
@@ -290,147 +262,166 @@ struct HeroCard: View {
         }
     }
 
-    private var legend: some View {
-        HStack(spacing: 12) {
-            legendItem(line, report.range == .day ? L("Today") : L("This period"))
-            if previous != nil {
-                legendItem(Color.white.opacity(0.3), report.range == .day ? L("Yesterday (even pace)") : report.range == .ytd ? L("Same period last year") : L("Previous period"))
-            }
-        }
+    /// Total in the other unit: cost when showing tokens, tokens otherwise
+    private var otherUnitTotal: String {
+        metric == .tokens ? L("Cost \(Fmt.money(report.stats.totalCost))") : "\(Fmt.tokens(totalTokens, exact: false)) tokens"
     }
 
-    private func legendItem(_ color: Color, _ text: String) -> some View {
+    private var totalTokens: Double { report.days.reduce(0) { $0 + Double($1.tokens) } }
+
+    // MARK: Facts
+
+    /// Four facts: average per day, the peak day, active days and the previous period's total
+    private var facts: [(String, String)] {
+        let s = report.stats
+        var out: [(String, String)] = []
+        if report.range == .day {
+            if let prev = report.previousTotal { out.append((L("Yesterday"), Fmt.metric(prev, metric, exact: false))) }
+            out.append((metric == .tokens ? L("Cost") : "Tokens", metric == .tokens ? Fmt.money(s.totalCost) : Fmt.tokens(totalTokens, exact: false)))
+            out.append((L("Messages"), Fmt.exact(report.days.reduce(0) { $0 + $1.messages })))
+            return out
+        }
+        out.append((L("Daily avg"), Fmt.metric(report.total / Double(max(1, s.totalDays)), metric, exact: false)))
+        if let peak = s.peak {
+            out.append((L("Peak · \(Fmt.shortDate(peak.date))"), Fmt.metric(metric.value(peak), metric, exact: false)))
+        }
+        out.append((L("Active days"), "\(s.activeDays) / \(s.totalDays)"))
+        // The 2×2 card has no room for this label, and the line under its number already says it
+        if let prev = report.previousTotal, !compact {
+            out.append((report.range == .ytd ? L("Same period last year") : L("Previous period"), Fmt.metric(prev, metric, exact: false)))
+        } else {
+            out.append((metric == .tokens ? L("Cost") : "Tokens", metric == .tokens ? Fmt.money(s.totalCost) : Fmt.tokens(totalTokens, exact: false)))
+        }
+        return out
+    }
+
+    // MARK: Legend
+
+    private var legend: some View {
+        HStack(spacing: 12) {
+            legendItem(report.range == .day ? L("Today") : L("This period")) {
+                Capsule().fill(LinearGradient(colors: chartColors.line, startPoint: .leading, endPoint: .trailing))
+            }
+            if !previous.isEmpty {
+                legendItem(report.range == .day ? L("Yesterday (even pace)") : report.range == .ytd ? L("Same period last year") : L("Previous period")) {
+                    DashedLine()
+                }
+            }
+        }
+        .lineLimit(1)
+        .fixedSize()
+    }
+
+    private func legendItem<Mark: View>(_ text: String, @ViewBuilder mark: () -> Mark) -> some View {
         HStack(spacing: 5) {
-            Capsule().fill(color).frame(width: 12, height: 2)
+            mark().frame(width: 14, height: 3)
             Text(text).font(.app(Typo.small)).foregroundStyle(.secondary)
         }
     }
 
-    private func chart(axes: Bool) -> some View {
-        let cur = current
-        let curLine = resampled(cur.map { ($0.x, $0.y) }, count: Self.samples)
-        let prevLine = previous.map { resampled($0, count: Self.samples) }
-        return Chart {
-            if let prevLine {
-                ForEach(Array(prevLine.enumerated()), id: \.offset) { i, p in
-                    LineMark(x: .value("Position", p.x), y: .value("Cumulative", p.y), series: .value("Period", "previous"))
-                        .interpolationMethod(.monotone)
-                        .foregroundStyle(Color.white.opacity(0.28))
-                        .lineStyle(StrokeStyle(lineWidth: 1.4, lineCap: .round))
-                }
-            }
-            ForEach(Array(curLine.enumerated()), id: \.offset) { i, p in
-                AreaMark(x: .value("Position", p.x), y: .value("Cumulative", p.y))
-                    .interpolationMethod(.monotone)
-                    .foregroundStyle(LinearGradient(colors: [line.opacity(0.15), line.opacity(0)],
-                                                    startPoint: .top, endPoint: .bottom))
-                LineMark(x: .value("Position", p.x), y: .value("Cumulative", p.y), series: .value("Period", "current"))
-                    .interpolationMethod(.monotone)
-                    .foregroundStyle(line)
-                    .lineStyle(StrokeStyle(lineWidth: 1.8, lineCap: .round, lineJoin: .round))
-            }
-            if let selected {
-                RuleMark(x: .value("Position", selected.x))
-                    .foregroundStyle(Color.white.opacity(0.35))
-                    .lineStyle(StrokeStyle(lineWidth: 1))
-                PointMark(x: .value("Position", selected.x), y: .value("Cumulative", selected.y))
-                    .foregroundStyle(line)
-                    .symbolSize(56)
-                if let prev = previousValue(at: selected.x) {
-                    PointMark(x: .value("Position", selected.x), y: .value("Cumulative", prev))
-                        .foregroundStyle(Color.white.opacity(0.5))
-                        .symbolSize(30)
-                }
-            } else if let last = curLine.last {
-                PointMark(x: .value("Position", last.x), y: .value("Cumulative", last.y))
-                    .foregroundStyle(line)
-                    .symbolSize(56)
-            }
-        }
-        .chartXScale(domain: 0...1)
-        .chartYScale(domain: 0...yMax)
-        .chartHover(Double.self) { x, p in hover(x, p) }
-        .chartXAxis(axes ? .automatic : .hidden)
-        .chartYAxis(axes ? .automatic : .hidden)
-        .chartXAxis {
-            AxisMarks(values: [0, 0.5, 1]) { value in
-                AxisValueLabel(anchor: xAnchor(value.as(Double.self) ?? 0)) {
-                    Text(xLabel(value.as(Double.self) ?? 0)).font(.app(Typo.axis)).foregroundStyle(.tertiary)
-                }
-            }
-        }
-        .chartYAxis {
-            // The cumulative curve starts bottom left, so the top left is always empty; ticks on the left never cover the curve
-            AxisMarks(position: .leading, values: [yMax / 1.08 * 0.5, yMax / 1.08]) { value in
-                AxisGridLine().foregroundStyle(Color.white.opacity(0.06))
-                AxisValueLabel {
-                    Text(Fmt.metric(value.as(Double.self) ?? 0, metric, exact: false))
-                        .font(.app(Typo.axis)).foregroundStyle(.tertiary)
-                }
+    /// The comparison line's dashes, as a legend mark
+    private struct DashedLine: View {
+        var body: some View {
+            Canvas { ctx, size in
+                var line = Path()
+                line.move(to: CGPoint(x: 0, y: size.height / 2))
+                line.addLine(to: CGPoint(x: size.width, y: size.height / 2))
+                ctx.stroke(line, with: .color(.white.opacity(0.4)), style: StrokeStyle(lineWidth: 1.5, lineCap: .round, dash: [3, 3]))
             }
         }
     }
 
-    /// Cumulative value of the previous period at the same horizontal position (linear interpolation)
-    private func previousValue(at x: Double) -> Double? {
-        guard let prev = previous, prev.count > 1 else { return nil }
-        let line = resampled(prev, count: 200)
-        return line.min { abs($0.x - x) < abs($1.x - x) }?.y
+    // MARK: Chart
+
+    private func chart(axes: Bool, bars: Bool) -> some View {
+        let points = current
+        let previous = previous
+        let colors = chartColors
+        return AreaChart(points: points.map { (x: $0.x, y: $0.y) }, comparison: previous, top: top(points, previous), axes: axes,
+                         format: ChartAxis.format(metric), xLabels: xLabels, selected: selectedIndex,
+                         line: colors.line, area: colors.area, bars: bars ? points.map(\.value) : nil) { index, at in
+            hover(index, at: at, points: points, previous: previous)
+        }
     }
 
-    private func hover(_ x: Double?, _ p: CGPoint) {
-        let tipID = "hero"
-        selectedX = x
-        guard x != nil, let point = selected else { tip?.hide(tipID); return }
-        let prev = previousValue(at: point.x)
+    private func hover(_ index: Int?, at point: CGPoint, points: [Point], previous: [(x: Double, y: Double)]) {
+        selectedIndex = index
+        guard let index, points.indices.contains(index) else { tip?.hide(Self.tipID); return }
+        let p = points[index]
+        let prev = previousValue(at: p.x, in: previous)
         let exact = settings.exactNumbers
-        tip?.show(tipID, at: p) {
-            TipCard(title: report.range == .day ? L("Today \(point.label)") : point.label) {
-                TipRow(color: line, label: report.range == .day ? L("This half-hour") : L("This day"), value: Fmt.metric(point.value, metric, exact: exact))
-                TipRow(label: L("Cumulative so far"), value: Fmt.metric(point.y, metric, exact: exact))
-                if let prev {
-                    TipRow(color: Color.white.opacity(0.35), label: report.range == .ytd ? L("Same point last year") : report.range == .day ? L("Same point yesterday (even pace)") : L("Same point previous period"),
-                           value: Fmt.metric(prev, metric, exact: false),
-                           secondary: prev > 0 ? String(format: "%@%.0f%%", point.y >= prev ? "+" : "−", abs(point.y - prev) / prev * 100) : nil)
-                }
-            }
+        let day = report.range == .day ? nil : (report.days.indices.contains(index) ? report.days[index] : nil)
+        tip?.show(Self.tipID, key: p.key, at: point, glide: true) {
+            HeroTip(title: report.range == .day ? L("Today \(p.label)") : DayDetailTip.dateTitle(p.key),
+                    metric: metric, value: p.value, cumulative: p.y, previous: prev, previousLabel: previousLabel,
+                    accent: accent, exact: exact, day: colors == nil ? nil : day, colors: colors)
         }
     }
 
-    private func xAnchor(_ x: Double) -> UnitPoint {
-        x == 0 ? .topLeading : x == 1 ? .topTrailing : .top
-    }
-
-    private func xLabel(_ x: Double) -> String {
-        if report.range == .day { return x == 0 ? "0:00" : x == 1 ? "24:00" : "12:00" }
-        let days = report.days
-        guard !days.isEmpty else { return "" }
-        if x >= 1 { return L("Today") }
-        let i = Int((x * Double(days.count - 1)).rounded())
-        return Fmt.shortDate(days[min(days.count - 1, i)].date)
-    }
-
-    /// "49.59 B" → ("49.59", "B"); plain exact numbers get the unit "tokens"
-    static func split(_ text: String, metric: UsageMetric) -> (number: String, unit: String) {
-        let parts = text.split(separator: " ", maxSplits: 1).map(String.init)
-        if parts.count == 2 { return (parts[0], parts[1]) }
-        return (text, metric == .tokens ? "tokens" : "")
+    private var previousLabel: String {
+        switch report.range {
+        case .day: L("Yesterday (even pace)")
+        case .ytd: L("Same period last year")
+        default: L("Previous period")
+        }
     }
 }
 
-/// Change chip: arrow plus text, colour is only a cue (direction never relies on colour alone)
-struct DeltaChip: View {
-    let percent: Double
+// MARK: - Hover readout
+
+/// The hovered point: the day's own value as the headline, the total so far, the previous period at the same
+/// point with the change, and (where the day has them) the models behind it
+private struct HeroTip: View {
+    let title: String
+    let metric: UsageMetric
+    let value: Double
+    let cumulative: Double
+    let previous: Double?
+    let previousLabel: String
+    let accent: Color
+    let exact: Bool
+    /// The hovered day; nil at 1D and without model colours (no breakdown then)
+    let day: DailyHistoryArchive.DaySummary?
+    let colors: ModelColors?
 
     var body: some View {
-        let flat = abs(percent) < 0.5
-        let up = percent > 0
-        let color = flat ? Color.secondary : (up ? Palette.up : Palette.down)
-        Text("\(flat ? "■" : up ? "▲" : "▼") \(String(format: "%.1f%%", abs(percent)))")
-            .font(.app(Typo.small, .semibold))
-            .monospacedDigit()
-            .foregroundStyle(color)
-            .padding(.horizontal, 7).padding(.vertical, 2)
-            .glassEffect(.regular.tint((flat ? Color.gray : (up ? Palette.up : Palette.down)).opacity(0.22)), in: .capsule)
+        let models = modelShares
+        let total = max(1e-9, models.reduce(0) { $0 + $1.value })
+        TipCard(title: title, icon: SettingsStore.Card.hero.icon, tint: accent, value: Fmt.metric(value, metric, exact: exact)) {
+            TipRow(label: L("So far"), value: Fmt.metric(cumulative, metric, exact: exact))
+            if let previous {
+                HStack(spacing: 6) {
+                    Text(previousLabel).font(.app(Typo.small)).foregroundStyle(.secondary).lineLimit(1)
+                    Spacer(minLength: 12)
+                    Text(Fmt.metric(previous, metric, exact: false)).font(.num(Typo.small, .medium)).lineLimit(1).fixedSize()
+                    if previous > 0 {
+                        DeltaChip(percent: (cumulative - previous) / previous * 100, invert: metric == .cost)
+                    }
+                }
+            }
+            if !models.isEmpty {
+                Divider().overlay(Palette.hairline).padding(.vertical, 1)
+                TipBar(parts: models.map { (colors?.color($0.key) ?? accent, $0.value) })
+                ForEach(models.prefix(4), id: \.key) { m in
+                    TipRow(color: colors?.color(m.key) ?? accent, label: colors?.name(m.key) ?? ModelPalette.shortName(m.key),
+                           value: Fmt.metric(m.value, metric, exact: false), secondary: percent(m.value / total))
+                }
+                if models.count > 4 {
+                    Text("+\(models.count - 4) more models").font(.app(Typo.axis)).foregroundStyle(.tertiary)
+                }
+            }
+        }
+    }
+
+    /// The day's models in the metric's unit (messages are not kept per model)
+    private var modelShares: [(key: String, value: Double)] {
+        guard let day, colors != nil else { return [] }
+        let raw: [String: Double]
+        switch metric {
+        case .tokens: raw = day.byModel.mapValues(Double.init)
+        case .cost: raw = day.costByModel
+        case .messages: return []
+        }
+        return raw.filter { $0.value > 0 }.sorted { $0.value > $1.value }.map { ($0.key, $0.value) }
     }
 }

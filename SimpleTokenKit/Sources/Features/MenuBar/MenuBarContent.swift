@@ -81,7 +81,7 @@ enum MenuBarRenderer {
         }
     }
 
-    nonisolated(unsafe) static let alertColor = NSColor(srgbRed: 0.94, green: 0.45, blue: 0.40, alpha: 1)
+    static let alertColor = NSColor(srgbRed: 0.94, green: 0.45, blue: 0.40, alpha: 1)
 
     private enum Piece {
         case mark

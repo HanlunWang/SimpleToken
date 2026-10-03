@@ -105,7 +105,7 @@ struct WidgetGrid: Layout {
 @MainActor
 final class CardDrag {
     /// Coordinate space of the scroll view (viewport); card frames are stored in content coordinates (HoverTip.space)
-    static let viewport = "simpletoken.viewport"
+    nonisolated static let viewport = "simpletoken.viewport"
 
     private(set) var card: SettingsStore.Card?
     private(set) var location: CGPoint = .zero
@@ -219,6 +219,8 @@ struct FloatingCard<Content: View>: View {
     var body: some View {
         if let card = drag.card {
             content(card)
+                // The lifted copy must look exactly like the card it replaces: no grow-in
+                .environment(\.chartEntrance, false)
                 .frame(width: drag.size.width, height: drag.size.height)
                 .scaleEffect(1.015)
                 .shadow(color: .black.opacity(0.5), radius: 24, y: 12)

@@ -1,5 +1,4 @@
 import SwiftUI
-import Charts
 import Core
 import DesignSystem
 
@@ -8,22 +7,36 @@ import DesignSystem
 @Observable
 @MainActor
 final class HoverTip {
-    static let space = "simpletoken.dashboard"
+    nonisolated static let space = "simpletoken.dashboard"
 
     private(set) var id: String?
     private(set) var point: CGPoint = .zero
     private(set) var content: AnyView?
+    /// Whether the tip glides to a new position (true between the marks of one chart) or jumps (a new chart)
+    private(set) var glide = false
+    /// What the content stands for; the content is rebuilt only when this changes
+    @ObservationIgnored private var key: String?
     /// Scrolling: hover callbacks are treated as "exit" (read in event callbacks, not observed by views)
     @ObservationIgnored var scrolling = false
 
     func hideAll() {
         guard id != nil else { return }
         id = nil
+        key = nil
         content = nil
     }
 
-    func show<V: View>(_ id: String, at point: CGPoint, @ViewBuilder _ content: () -> V) {
+    /// Shows `content` at `point`. With a `key`, the same key on the same tip only moves it (the content is
+    /// not rebuilt), and with `glide` the move is animated: hovering along a chart slides the tip with the pointer.
+    func show<V: View>(_ id: String, key: String? = nil, at point: CGPoint, glide: Bool = false, @ViewBuilder _ content: () -> V) {
+        let same = self.id == id && key != nil && self.key == key
+        self.glide = glide && self.id == id
+        if same {
+            if self.point != point { self.point = point }
+            return
+        }
         self.id = id
+        self.key = key
         self.point = point
         self.content = AnyView(content())
     }
@@ -37,6 +50,7 @@ final class HoverTip {
     func hide(_ id: String) {
         guard self.id == id else { return }
         self.id = nil
+        key = nil
         content = nil
     }
 }
@@ -59,6 +73,7 @@ struct HoverTipLayer: View {
                     .onGeometryChange(for: CGSize.self, of: { $0.size }) { size = $0 }
                     .offset(x: x, y: y)
                     .opacity(size == .zero ? 0 : 1)
+                    .animation(tip.glide ? Motion.hover : nil, value: tip.point)
                     .transition(.opacity.animation(.easeOut(duration: 0.12)))
             }
         }
@@ -68,22 +83,55 @@ struct HoverTipLayer: View {
 
 // MARK: - Tip card layout
 
-/// Tip card: title + rows + optional footnote
+/// Tip card: a header (an optional tinted icon chip, title and subtitle, the headline value on the right),
+/// then rows, then an optional footnote
 struct TipCard<Content: View>: View {
     let title: String
     var subtitle: String?
+    /// SF Symbol in a small chip tinted with `tint`
+    var icon: String?
+    var tint: Color?
+    /// The headline number, right of the title
+    var value: String?
+    var footnote: String?
     @ViewBuilder var content: Content
 
+    init(title: String, subtitle: String? = nil, icon: String? = nil, tint: Color? = nil, value: String? = nil,
+         footnote: String? = nil, @ViewBuilder content: () -> Content) {
+        self.title = title
+        self.subtitle = subtitle
+        self.icon = icon
+        self.tint = tint
+        self.value = value
+        self.footnote = footnote
+        self.content = content()
+    }
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 5) {
-            VStack(alignment: .leading, spacing: 1) {
-                Text(title).font(.app(Typo.body, .semibold)).lineLimit(1).truncationMode(.middle)
-                if let subtitle {
-                    Text(subtitle).font(.app(Typo.small)).foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(alignment: .top, spacing: 7) {
+                if let icon {
+                    Image(systemName: icon).font(.app(Typo.small, .semibold)).foregroundStyle(tint ?? .secondary)
+                        .frame(width: 20, height: 20)
+                        .background(ChipBackground(tint, radius: 6))
+                }
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(title).font(.app(Typo.body, .semibold)).lineLimit(1).truncationMode(.middle)
+                    if let subtitle {
+                        Text(subtitle).font(.app(Typo.small)).foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+                if let value {
+                    Spacer(minLength: 10)
+                    Text(value).font(.num(Typo.body + 2, .semibold)).lineLimit(1).fixedSize()
                 }
             }
             content
+            if let footnote {
+                Text(footnote).font(.app(Typo.axis)).foregroundStyle(.tertiary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
         .monospacedDigit()
         .padding(.horizontal, 11).padding(.vertical, 9)
@@ -105,9 +153,9 @@ struct TipRow: View {
             if let color { Swatch(color, size: 7) }
             Text(label).font(.app(Typo.small)).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
             Spacer(minLength: 12)
-            Text(value).font(.app(Typo.small, .medium)).lineLimit(1).fixedSize()
+            Text(value).font(.num(Typo.small, .medium)).lineLimit(1).fixedSize()
             if let secondary {
-                Text(secondary).font(.app(Typo.small)).foregroundStyle(.tertiary)
+                Text(secondary).font(.num(Typo.small, .regular)).foregroundStyle(.tertiary)
                     .frame(minWidth: 30, alignment: .trailing)
             }
         }
@@ -121,13 +169,12 @@ struct TipBar: View {
     var body: some View {
         let total = max(1e-9, parts.reduce(0) { $0 + $1.1 })
         GeometryReader { geo in
-            HStack(spacing: 1) {
+            HStack(spacing: 1.5) {
                 ForEach(parts.indices, id: \.self) { i in
-                    Rectangle().fill(parts[i].0)
-                        .frame(width: max(1, (geo.size.width - CGFloat(parts.count - 1)) * parts[i].1 / total))
+                    RoundedRectangle(cornerRadius: 2, style: .continuous).fill(parts[i].0.fill)
+                        .frame(width: max(1.5, (geo.size.width - CGFloat(parts.count - 1) * 1.5) * parts[i].1 / total))
                 }
             }
-            .clipShape(Capsule())
         }
         .frame(height: 5)
         .padding(.vertical, 2)
@@ -182,42 +229,9 @@ struct DayDetailTip: View {
     }
 }
 
-// MARK: - Chart hover
-
-/// Hover layer over Swift Charts: reports the x value and pointer position (dashboard coordinates) as the mouse moves.
-/// On macOS chartXSelection only fires while dragging, so hover readouts need their own handling.
-struct ChartHoverArea<X: Plottable>: View {
-    let proxy: ChartProxy
-    let onHover: (X?, CGPoint) -> Void
-    @Environment(HoverTip.self) private var tip: HoverTip?
-
-    var body: some View {
-        GeometryReader { geo in
-            Rectangle().fill(.clear).contentShape(Rectangle())
-                .onContinuousHover(coordinateSpace: .local) { phase in
-                    if tip?.scrolling == true { onHover(nil, .zero); return }
-                    switch phase {
-                    case .active(let p):
-                        guard let anchor = proxy.plotFrame else { return }
-                        let plot = geo[anchor]
-                        guard p.x >= plot.minX - 4, p.x <= plot.maxX + 4 else { onHover(nil, .zero); return }
-                        let x: X? = proxy.value(atX: min(max(p.x, plot.minX), plot.maxX) - plot.minX)
-                        let origin = geo.frame(in: .named(HoverTip.space)).origin
-                        onHover(x, CGPoint(x: origin.x + p.x, y: origin.y + p.y))
-                    case .ended:
-                        onHover(nil, .zero)
-                    }
-                }
-        }
-    }
-}
+// MARK: - Hover for plain views
 
 extension View {
-    /// Hover readout: x value + pointer position in the dashboard; nil on exit
-    func chartHover<X: Plottable>(_ type: X.Type, _ onHover: @escaping (X?, CGPoint) -> Void) -> some View {
-        chartOverlay { proxy in ChartHoverArea<X>(proxy: proxy, onHover: onHover) }
-    }
-
     /// Hover for plain views: pointer position in the dashboard; nil on exit
     func dashboardHover(_ onHover: @escaping (CGPoint?) -> Void) -> some View {
         modifier(DashboardHover(onHover: onHover))

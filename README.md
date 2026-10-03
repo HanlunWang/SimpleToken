@@ -42,6 +42,8 @@ Widgets include:
 | Main chart | Cumulative usage for the selected range against the previous period (or the same period last year) |
 | Limits | Claude session, weekly and model windows, Codex windows, pace markers and a projection to the reset |
 | Models | Share by model with vendor colours and logos, daily trends and cost per million tokens |
+| Usage map | A treemap of your models, grouped by vendor and sized by usage |
+| Flow | A flow diagram from tools to the models they used |
 | Usage chart | Stacked bars by model or tool, or half-hour bars for a single day with day-by-day navigation |
 | Calendar | A heatmap of daily usage with streaks and your busiest day |
 | Time of day | A weekday × hour punchcard of when you work |
@@ -50,7 +52,7 @@ Widgets include:
 | This month's cost | Month-to-date cost at list prices, a month-end projection and last month for reference |
 | Stats | Eight single-number widgets: daily average, peak day, active days, cost per million tokens, total cost, messages, top model and busiest weekday |
 
-Hover over any chart for details: a day's model and tool breakdown, a half-hour slot, a calendar day ranked against the rest, or a punchcard cell with its model mix. Time ranges run from 1D to ALL.
+Charts are drawn with a shared kit: rounded, softly lit marks that morph when you switch the range or metric. Hover over any of them for details: a day's model and tool breakdown, a half-hour slot, a calendar day ranked against the rest, a punchcard cell with its model mix, or a tool's share of a model. Time ranges run from 1D to ALL.
 
 ### Menu bar
 
@@ -76,12 +78,40 @@ Optional notifications when a limit crosses thresholds you choose. Settings cove
   <img src="docs/images/settings.png" width="760" alt="Settings">
 </p>
 
-## Requirements
+## Install
 
-- macOS 26 or later on Apple silicon (the bundled tokscale binary is arm64)
-- To build: Xcode 26 or later and [XcodeGen](https://github.com/yonaskolb/XcodeGen) (`brew install xcodegen`)
+Download `SimpleToken-<version>.zip` from [Releases](https://github.com/HanlunWang/SimpleToken/releases), unzip it and move `SimpleToken.app` to `/Applications`. It needs macOS 26 or later on Apple silicon.
 
-## Build and run
+If macOS says the app cannot be checked for malicious software (a release that is signed but not yet notarized), open it once with right-click → **Open**, or run:
+
+```bash
+xattr -dr com.apple.quarantine /Applications/SimpleToken.app
+```
+
+SimpleToken lives in the menu bar. Click its icon for the panel, or ⌥-click for the main window.
+
+## Getting your usage in
+
+SimpleToken never asks you to sign in to it. It reads what your coding tools already record on this Mac, so there are two separate things to set up.
+
+**1. Usage (tokens, cost, models, tools): nothing to configure.** Keep using your tools on this Mac while signed in to them as usual. SimpleToken picks up their local logs automatically:
+
+| Tool | What to do |
+| --- | --- |
+| Claude Code | Sign in once with `claude` (Claude subscription or API key). Sessions are logged to `~/.claude/projects`. |
+| Codex (CLI or app) | Sign in once with `codex login` or in the Codex / ChatGPT app. Sessions are logged under `~/.codex`. |
+| GitHub Copilot CLI, OpenCode, Gemini CLI | Use them as usual; their local logs are read if present. |
+
+A model shows up as soon as a tool has logged a request with it, grouped by vendor (Anthropic, OpenAI, Google and others). Nothing appears for tools you haven't used on this Mac. Half-hour (1D) detail is available for Claude Code only.
+
+**2. Plan limits (optional).**
+
+- **Claude:** limits come from claude.ai. Sign in to claude.ai in your browser, open Developer Tools → Application → Cookies → `https://claude.ai`, copy the value of `sessionKey` (it starts with `sk-ant-`) and paste it into Settings → Limits & Alerts. It is stored only on this Mac, in a file only your user can read. If limits stop updating after you sign out of claude.ai, paste a fresh value. The plan name (for example Max 20x) is read from Claude Code's keychain item, so macOS may ask once whether SimpleToken can read "Claude Code-credentials".
+- **Codex:** nothing to paste. SimpleToken asks the local `codex app-server` (read-only, no approvals), which uses your existing Codex sign-in. It finds `codex` inside Codex.app or ChatGPT.app, in `~/.local/bin`, or in Homebrew.
+
+## Build from source
+
+Requirements: macOS 26 or later on Apple silicon, Xcode 26 or later, and [XcodeGen](https://github.com/yonaskolb/XcodeGen) (`brew install xcodegen`).
 
 ```bash
 git clone https://github.com/HanlunWang/SimpleToken.git
@@ -91,8 +121,6 @@ xcodebuild -project SimpleToken.xcodeproj -scheme SimpleToken -configuration Rel
 open build/Build/Products/Release/SimpleToken.app
 ```
 
-To keep it, copy `SimpleToken.app` to `/Applications`.
-
 The app is signed ad-hoc by default, which is enough to run it on the Mac that built it. To sign with your own certificate, create `Config/Signing.local.xcconfig` (it is git-ignored):
 
 ```
@@ -100,14 +128,7 @@ CODE_SIGN_IDENTITY = Apple Development
 DEVELOPMENT_TEAM = YOUR_TEAM_ID
 ```
 
-Run the unit tests with `cd SimpleTokenKit && swift test`.
-
-## Setting up plan limits
-
-- **Claude:** open claude.ai in your browser, copy the `sessionKey` cookie (Developer Tools → Application → Cookies) and paste it into Settings → Limits & Alerts. It is stored only on your Mac, in a file readable by your user alone.
-- **Codex:** nothing to set up. SimpleToken asks the local `codex app-server` in read-only mode.
-
-Usage statistics work without either.
+Run the unit tests with `cd SimpleTokenKit && swift test`. `scripts/release.sh` builds a Developer ID signed zip and, with `NOTARY_PROFILE` set, notarizes it.
 
 ## Where the data comes from
 

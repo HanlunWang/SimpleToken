@@ -1,5 +1,4 @@
 import SwiftUI
-import Charts
 import Core
 import DesignSystem
 
@@ -61,8 +60,8 @@ enum StatKind: String, CaseIterable, Identifiable {
 
 // MARK: - Stat widgets
 
-/// A stat widget. Small (1×1): value + its own mini chart; medium (2×1): value and details on the left, a larger chart on the right.
-/// Back: colour, size, hide.
+/// A stat widget. Small (1×1): the number, one line of context and a small chart at the bottom; medium (2×1):
+/// the number and its context on the left, a taller chart on the right. Back: colour, size, hide.
 struct StatTile: View {
     let kind: StatKind
     let report: RangeReport
@@ -78,6 +77,7 @@ struct StatTile: View {
     private var accent: Color { settings.accent(accentKey, kind.defaultAccent) }
     private var tipID: String { "tile.\(kind.rawValue)" }
     private var card: SettingsStore.Card { SettingsStore.Card(rawValue: "stat." + kind.rawValue) ?? .statAverage }
+    private var medium: Bool { cardSize != .small }
 
     var body: some View {
         FlipCard(flipped: flipped) {
@@ -98,35 +98,33 @@ struct StatTile: View {
     }
 
     private var front: some View {
-        let content = tileContent
-        return Group {
-            if cardSize == .small {
-                // 1×1: number at the top, one line of detail below, mini chart fills the bottom
-                VStack(alignment: .leading, spacing: 2) {
-                    header
-                    value(content.value, size: WidgetStyle.number(.small))
-                    Text(content.sub).font(.app(Typo.small)).foregroundStyle(.tertiary)
-                        .lineLimit(1).minimumScaleFactor(0.8).truncationMode(.tail).monospacedDigit()
-                    chart(detail: false)
-                        .frame(maxHeight: .infinity)
-                        .padding(.top, 8)
-                }
-            } else {
-                // 2×1: number + two facts on the left, a larger chart on the right
+        Group {
+            if medium {
+                // 2×1: number and context on the left, the chart fills the right
                 VStack(alignment: .leading, spacing: 6) {
                     header
-                    HStack(alignment: .top, spacing: 18) {
-                        VStack(alignment: .leading, spacing: 0) {
-                            value(content.value, size: WidgetStyle.number(.medium))
-                            Spacer(minLength: 4)
-                            HStack(alignment: .top, spacing: 14) {
-                                ForEach(Array(details.enumerated()), id: \.offset) { _, f in Fact(label: f.0, value: f.1) }
-                            }
+                    HStack(alignment: .top, spacing: 16) {
+                        VStack(alignment: .leading, spacing: 3) {
+                            number(size: WidgetStyle.number(.medium))
+                            subline
+                            Spacer(minLength: 0)
+                            secondaryLine
                         }
-                        .frame(width: 168, alignment: .leading)
-                        chart(detail: true)
+                        .frame(minWidth: 120, maxWidth: 150, alignment: .leading)
+                        .layoutPriority(1)
+                        visual
                             .frame(maxWidth: .infinity, maxHeight: .infinity)
                     }
+                }
+            } else {
+                // 1×1: number, one line of context, a small chart along the bottom
+                VStack(alignment: .leading, spacing: 3) {
+                    header
+                    number(size: WidgetStyle.number(.small))
+                    subline
+                    Spacer(minLength: 2)
+                    visual
+                        .frame(maxWidth: .infinity)
                 }
             }
         }
@@ -134,180 +132,338 @@ struct StatTile: View {
         .onHover { inside in withAnimation(.easeOut(duration: 0.15)) { hovering = inside } }
     }
 
-    /// The two facts shown at medium size
-    private var details: [(String, String)] {
-        let s = report.stats
-        let days = report.days
+    // MARK: Number
+
+    @ViewBuilder private func number(size: CGFloat) -> some View {
+        switch kind {
+        case .perMillion: MoneyNumber(stats.costPerMillion, size: size)
+        case .totalCost: MoneyNumber(stats.totalCost, size: size)
+        case .topModel: topModelName(size: size)
+        default: BigNumber(headline.text, size: size, value: headline.value)
+        }
+    }
+
+    private var stats: RangeReport.Stats { report.stats }
+    private var days: [DailyHistoryArchive.DaySummary] { report.days }
+    private var messages: Int { days.reduce(0) { $0 + $1.messages } }
+    private var tokens: Int { days.reduce(0) { $0 + $1.tokens } }
+    private var topModel: RangeReport.Share? { report.models.first }
+    private var modelTotal: Double { Double(max(1, report.models.reduce(0) { $0 + $1.tokens })) }
+
+    /// The big number as text, with the value behind it for the digits' transition
+    private var headline: (text: String, value: Double?) {
+        switch kind {
+        case .average: (Fmt.tokens(stats.averagePerDay, exact: exact), stats.averagePerDay)
+        case .peak: stats.peak.map { (Fmt.tokens(Double($0.tokens), exact: exact), Double($0.tokens)) } ?? ("—", nil)
+        case .active: ("\(stats.activeDays) / \(stats.totalDays)", Double(stats.activeDays))
+        case .messages: (Fmt.exact(messages), Double(messages))
+        case .weekday: (busiestWeekday.map { Fmt.weekdaysFromMonday[$0] } ?? "—", nil)
+        case .perMillion, .totalCost, .topModel: ("", nil)
+        }
+    }
+
+    /// The top model's name beside its mark, in text colour; the mark wears the model's colour
+    @ViewBuilder private func topModelName(size: CGFloat) -> some View {
+        if let top = topModel {
+            HStack(spacing: 6) {
+                EntityMark(logo: BrandLogos.model(top.key), color: colors.color(top.key), size: size * 0.6)
+                Text(colors.name(top.key)).font(.app(size * 0.68, .semibold))
+                    .lineLimit(1).minimumScaleFactor(0.6).truncationMode(.middle)
+            }
+            .frame(height: size * 1.2)
+        } else {
+            BigNumber("—", size: size)
+        }
+    }
+
+    // MARK: Context lines
+
+    private var subline: some View {
+        Text(subText).font(.app(Typo.small)).foregroundStyle(.tertiary).monospacedDigit()
+            .lineLimit(1).minimumScaleFactor(0.8).truncationMode(.tail)
+    }
+
+    private var subText: String {
         switch kind {
         case .average:
+            return L("Active-day avg \(Fmt.tokens(stats.averagePerActiveDay, exact: exact))")
+        case .peak:
+            guard let peak = stats.peak else { return L("No usage in range") }
+            return L("\(Fmt.shortDate(peak.date)) · \(String(format: "%.1f", peakRatio))× daily avg")
+        case .active:
+            return L("Streak \(stats.streak) d · longest \(longestStreak) d")
+        case .perMillion:
+            return L("Total \(Fmt.money(stats.totalCost))")
+        case .totalCost:
+            return L("Daily avg \(Fmt.money(stats.totalCost / Double(max(1, stats.totalDays))))")
+        case .messages:
+            return messages > 0 ? L("~\(Fmt.tokens(Double(tokens) / Double(messages), exact: false)) tokens per message") : L("No messages in range")
+        case .topModel:
+            guard let top = topModel else { return L("No usage in range") }
+            return L("\(percent(Double(top.tokens) / modelTotal)) share · \(report.models.count) models")
+        case .weekday:
+            guard let best = busiestWeekday else { return L("No usage in range") }
+            return L("Avg per day \(Fmt.tokens(weekdays[best].average, exact: exact))")
+        }
+    }
+
+    /// Medium only: the change against the previous period, or one more fact when there is none
+    @ViewBuilder private var secondaryLine: some View {
+        let line = secondary
+        HStack(spacing: 6) {
+            if let delta = line.delta {
+                DeltaChip(percent: delta, invert: line.invert)
+            }
+            Text(line.text).font(.app(Typo.small)).foregroundStyle(.tertiary).monospacedDigit()
+                .lineLimit(1).minimumScaleFactor(0.8).truncationMode(.tail)
+        }
+        .frame(height: 18)
+    }
+
+    private var secondary: (delta: Double?, invert: Bool, text: String) {
+        let vs = L("vs previous period")
+        let previous = report.previousDays ?? []
+        let prevTokens = previous.reduce(0) { $0 + $1.tokens }
+        let prevCost = previous.reduce(0) { $0 + $1.cost }
+        switch kind {
+        case .average:
+            if let d = change(stats.averagePerDay, previous.isEmpty ? nil : Double(prevTokens) / Double(previous.count)) { return (d, false, vs) }
             let sorted = days.map(\.tokens).filter { $0 > 0 }.sorted()
-            let median = sorted.isEmpty ? 0 : sorted[sorted.count / 2]
-            return [(L("Active-day avg"), Fmt.tokens(s.averagePerActiveDay, exact: false)), (L("Median"), Fmt.tokens(Double(median), exact: false))]
+            return (nil, false, "\(L("Median")) \(Fmt.tokens(Double(sorted.isEmpty ? 0 : sorted[sorted.count / 2]), exact: false))")
         case .peak:
-            guard let peak = s.peak else { return [] }
-            let ratio = s.averagePerDay > 0 ? Double(peak.tokens) / s.averagePerDay : 0
-            return [(L("Date"), Fmt.shortDate(peak.date)), (L("vs daily avg"), L("\(String(format: "%.1f", ratio))×"))]
+            if let peak = stats.peak, let d = change(Double(peak.tokens), previous.map(\.tokens).max().map(Double.init)) { return (d, false, vs) }
+            return (nil, false, stats.peak.map { Fmt.longDate($0.date) } ?? "")
         case .active:
-            return [(L("Current streak"), L("\(s.streak) d")), (L("Longest streak"), L("\(longestStreak) d"))]
+            if let d = change(Double(stats.activeDays), previous.isEmpty ? nil : Double(previous.filter { $0.tokens > 0 }.count)) { return (d, false, vs) }
+            return (nil, false, "\(L("Longest streak")) \(L("\(longestStreak) d"))")
         case .perMillion:
+            if let d = change(stats.costPerMillion, prevTokens > 0 ? prevCost / (Double(prevTokens) / 1e6) : nil) { return (d, true, vs) }
             let rates = days.filter { $0.tokens > 0 }.map { $0.cost / (Double($0.tokens) / 1e6) }
-            return [(L("Lowest day"), Fmt.money(rates.min() ?? 0)), (L("Highest day"), Fmt.money(rates.max() ?? 0))]
+            return (nil, true, "\(L("Lowest day")) \(Fmt.money(rates.min() ?? 0))")
         case .totalCost:
-            return [(L("Daily avg"), Fmt.money(s.totalCost / Double(max(1, s.totalDays)))), (L("Highest day"), Fmt.money(days.map(\.cost).max() ?? 0))]
+            if let d = change(stats.totalCost, previous.isEmpty ? nil : prevCost) { return (d, true, vs) }
+            return (nil, true, "\(L("Highest day")) \(Fmt.money(days.map(\.cost).max() ?? 0))")
         case .messages:
-            let messages = days.reduce(0) { $0 + $1.messages }
-            let tokens = days.reduce(0) { $0 + $1.tokens }
-            return [(L("Per message"), messages > 0 ? Fmt.tokens(Double(tokens) / Double(messages), exact: false) : "—"),
-                    (L("Daily avg"), L("\(messages / max(1, s.totalDays)) msgs"))]
+            if let d = change(Double(messages), previous.isEmpty ? nil : Double(previous.reduce(0) { $0 + $1.messages })) { return (d, false, vs) }
+            return (nil, false, "\(L("Daily avg")) \(L("\(messages / max(1, stats.totalDays)) msgs"))")
         case .topModel:
-            guard let top = report.models.first else { return [] }
-            let total = max(1, report.models.reduce(0) { $0 + $1.tokens })
-            return [(L("Share"), percent(Double(top.tokens) / Double(total))), (L("Model count"), String(report.models.count))]
+            guard let top = topModel else { return (nil, false, "") }
+            if let d = change(Double(top.tokens), previous.isEmpty ? nil : Double(previous.reduce(0) { $0 + ($1.byModel[top.key] ?? 0) })) { return (d, false, vs) }
+            return (nil, false, "\(L("Cost")) \(Fmt.money(top.cost))")
         case .weekday:
-            let avg = weekdayAverages
-            let active = avg.indices.filter { avg[$0] > 0 }
-            let low = active.min { avg[$0] < avg[$1] }
-            let best = avg.indices.max { avg[$0] < avg[$1] }
-            return [(L("Avg per day"), best.map { Fmt.tokens(avg[$0], exact: false) } ?? "—"), (L("Quietest"), low.map { Fmt.weekdaysFromMonday[$0] } ?? "—")]
+            let active = weekdays.indices.filter { weekdays[$0].average > 0 }
+            let low = active.min { weekdays[$0].average < weekdays[$1].average }
+            return (nil, false, low.map { "\(L("Quietest")) · \(Fmt.weekdaysFromMonday[$0])" } ?? "")
         }
     }
 
-    private func value(_ text: String, size: CGFloat) -> some View {
-        BigNumber(text, size: kind == .topModel ? size * 0.8 : size, color: kind == .topModel ? accent : .primary)
+    /// Change in percent; nil without a comparison or when it was zero
+    private func change(_ now: Double, _ before: Double?) -> Double? {
+        guard let before, before > 0 else { return nil }
+        return (now - before) / before * 100
     }
 
-    private var tileContent: (value: String, sub: String) {
-        let s = report.stats
+    private var peakRatio: Double {
+        guard let peak = stats.peak, stats.averagePerDay > 0 else { return 0 }
+        return Double(peak.tokens) / stats.averagePerDay
+    }
+
+    // MARK: Visuals
+
+    /// Small: at most 34 pt along the bottom; medium: fills the right column
+    @ViewBuilder private var visual: some View {
         switch kind {
         case .average:
-            return (Fmt.tokens(s.averagePerDay, exact: exact), L("Active-day avg \(Fmt.tokens(s.averagePerActiveDay, exact: exact))"))
-        case .peak:
-            guard let peak = s.peak else { return ("—", L("No usage in range")) }
-            let ratio = s.averagePerDay > 0 ? Double(peak.tokens) / s.averagePerDay : 0
-            return (Fmt.tokens(Double(peak.tokens), exact: exact),
-                    L("\(Fmt.shortDate(peak.date)) · \(String(format: "%.1f", ratio))× daily avg"))
-        case .active:
-            return ("\(s.activeDays) / \(s.totalDays)", L("Streak \(s.streak) d · longest \(longestStreak) d"))
-        case .perMillion:
-            return (Fmt.money(s.costPerMillion), L("Total \(Fmt.money(s.totalCost))"))
+            dayBars(value: { Double($0.tokens) }, rule: stats.averagePerDay)
+                .frame(height: medium ? nil : 30)
         case .totalCost:
-            return (Fmt.money(s.totalCost), L("Daily avg \(Fmt.money(s.totalCost / Double(max(1, s.totalDays))))"))
-        case .messages:
-            let messages = report.days.reduce(0) { $0 + $1.messages }
-            let tokens = report.days.reduce(0) { $0 + $1.tokens }
-            return (Fmt.metric(Double(messages), .messages, exact: true),
-                    messages > 0 ? L("~\(Fmt.tokens(Double(tokens) / Double(messages), exact: false)) tokens per message") : L("No messages in range"))
-        case .topModel:
-            guard let top = report.models.first else { return ("—", L("No usage in range")) }
-            let total = max(1, report.models.reduce(0) { $0 + $1.tokens })
-            return (colors.name(top.key), L("\(percent(Double(top.tokens) / Double(total))) share · \(report.models.count) models"))
-        case .weekday:
-            let avg = weekdayAverages
-            guard let best = avg.indices.max(by: { avg[$0] < avg[$1] }), avg[best] > 0 else { return ("—", L("No usage in range")) }
-            return (Fmt.weekdaysFromMonday[best], L("Avg per day \(Fmt.tokens(avg[best], exact: exact))"))
-        }
-    }
-
-    @ViewBuilder private func chart(detail: Bool) -> some View {
-        switch kind {
-        case .average:
-            MiniBars(values: report.days.map { Double($0.tokens) }, color: accent, average: report.stats.averagePerDay) { i, p in
-                hoverDay(i, p)
-            }
+            dayBars(value: \.cost, rule: stats.totalCost / Double(max(1, stats.totalDays)))
+                .frame(height: medium ? nil : 30)
         case .peak:
-            TopDays(days: report.days, color: accent, exact: exact, count: detail ? 5 : 3) { day, p in
+            TopDays(days: Array(days.filter { $0.tokens > 0 }.sorted { $0.tokens > $1.tokens }.prefix(3)), color: accent, roomy: medium) { day, p in
                 if let day, let p {
-                    tip?.show(tipID, at: p) { DayDetailTip(day: day, colors: colors, exact: exact) }
+                    tip?.show(tipID, key: day.date, at: p) { DayDetailTip(day: day, colors: colors, exact: exact, note: deltaNote(for: day)) }
                 } else { tip?.hide(tipID) }
             }
+            .frame(height: medium ? nil : 34)
         case .active:
-            DayStrip(days: Array(report.days.suffix(detail ? 120 : 60)), color: accent) { day, p in
+            DayStrip(days: days, color: accent) { day, p in
                 if let day, let p {
-                    tip?.show(tipID, at: p) { DayDetailTip(day: day, colors: colors, exact: exact) }
+                    tip?.show(tipID, key: day.date, at: p, glide: true) { DayDetailTip(day: day, colors: colors, exact: exact) }
                 } else { tip?.hide(tipID) }
             }
+            .frame(height: medium ? nil : 30)
         case .perMillion:
-            Sparkline(values: report.days.map { $0.tokens > 0 ? $0.cost / (Double($0.tokens) / 1e6) : 0 }, color: accent) { i, p in
-                showValue(i, p) { L("\(Fmt.money(report.days[$0].tokens > 0 ? report.days[$0].cost / (Double(report.days[$0].tokens) / 1e6) : 0)) / 1M") }
+            // Days without usage have no rate: leave them out instead of dipping to zero
+            let active = days.filter { $0.tokens > 0 }
+            SparkLine(values: active.map { $0.cost / (Double($0.tokens) / 1e6) }, color: accent, tipID: tipID) { i in
+                AnyView(rateTip(active[i]))
             }
-        case .totalCost:
-            MiniBars(values: report.days.map(\.cost), color: accent,
-                     average: report.stats.totalCost / Double(max(1, report.days.count))) { i, p in
-                showValue(i, p) { Fmt.money(report.days[$0].cost) }
-            }
+            .frame(height: medium ? nil : 30)
         case .messages:
-            Sparkline(values: report.days.map { Double($0.messages) }, color: accent) { i, p in
-                showValue(i, p) { Fmt.metric(Double(report.days[$0].messages), .messages, exact: true) }
+            SparkLine(values: days.map { Double($0.messages) }, color: accent, tipID: tipID) { i in
+                AnyView(DayDetailTip(day: days[i], colors: colors, exact: exact))
             }
+            .frame(height: medium ? nil : 30)
         case .topModel:
-            let total = Double(max(1, report.models.reduce(0) { $0 + $1.tokens }))
-            ProportionBar(parts: report.models.prefix(6).map { (colors.color($0.key), Double($0.tokens)) },
-                          height: detail ? 10 : 8) { i, p in
-                if let i, let p {
-                    let share = report.models[i]
-                    tip?.show(tipID, at: p) {
-                        TipCard(title: colors.name(share.key), subtitle: ModelPalette.vendor(share.key).localizedName) {
-                            TipRow(color: colors.color(share.key), label: "Tokens", value: Fmt.tokens(Double(share.tokens), exact: exact),
-                                   secondary: percent(Double(share.tokens) / total))
-                            TipRow(label: L("Cost"), value: Fmt.money(share.cost))
-                        }
-                    }
-                } else { tip?.hide(tipID) }
-            }
-            .frame(maxHeight: .infinity, alignment: .bottom)
+            modelShares
         case .weekday:
-            WeekdayBars(values: weekdayAverages, color: accent) { i, p in
-                if let i, let p {
-                    tip?.show(tipID, at: p) {
-                        TipCard(title: Fmt.weekdaysFromMonday[i], subtitle: L("\(report.range.localizedLabel) · avg per day")) {
-                            TipRow(color: accent, label: "Tokens", value: Fmt.tokens(weekdayAverages[i], exact: exact))
-                        }
+            weekdayBars
+        }
+    }
+
+    /// The range's days as bars (grouped when there are more than fit), with the average as a dashed line
+    private func dayBars(value: @escaping (DailyHistoryArchive.DaySummary) -> Double, rule: Double) -> some View {
+        let groups = buckets(limit: medium ? 36 : 30)
+        let values = groups.map { g in g.reduce(0) { $0 + value($1) } / Double(max(1, g.count)) }
+        return SparkBars(values: values, color: accent, rule: rule, tipID: tipID) { i in
+            AnyView(bucketTip(groups[i], metricRule: rule, value: value))
+        }
+    }
+
+    /// Consecutive groups of days, oldest first, at most `limit` of them
+    private func buckets(limit: Int) -> [ArraySlice<DailyHistoryArchive.DaySummary>] {
+        guard !days.isEmpty else { return [] }
+        let per = max(1, Int((Double(days.count) / Double(limit)).rounded(.up)))
+        return stride(from: 0, to: days.count, by: per).map { days[$0..<min(days.count, $0 + per)] }
+    }
+
+    /// Share bar of the models (the top model's tile); medium names the three biggest under it
+    @ViewBuilder private var modelShares: some View {
+        let parts = report.models.prefix(6).map { (key: $0.key, value: Double($0.tokens), color: colors.color($0.key)) }
+        if parts.isEmpty {
+            Color.clear.frame(height: medium ? nil : 8)
+        } else if medium {
+            VStack(alignment: .leading, spacing: 6) {
+                SegmentBar(parts: parts, height: 10, tipID: tipID) { key in AnyView(modelTip(key)) }
+                ForEach(report.models.prefix(3)) { share in
+                    HStack(spacing: 6) {
+                        EntityMark(logo: BrandLogos.model(share.key), color: colors.color(share.key), size: 11)
+                        Text(colors.name(share.key)).font(.app(Typo.small)).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
+                        Spacer(minLength: 6)
+                        Text(percent(Double(share.tokens) / modelTotal)).font(.num(Typo.small, .medium)).foregroundStyle(.secondary).monospacedDigit()
                     }
-                } else { tip?.hide(tipID) }
+                    .contentShape(Rectangle())
+                    .dashboardHover { p in
+                        if let p { tip?.show(tipID, key: share.key, at: p) { modelTip(share.key) } } else { tip?.hide(tipID) }
+                    }
+                }
+                Spacer(minLength: 0)
+            }
+        } else {
+            SegmentBar(parts: parts, height: 8, tipID: tipID) { key in AnyView(modelTip(key)) }
+                .frame(height: 8)
+        }
+    }
+
+    /// Average per weekday as bars, the busiest at full strength, with the weekdays' initials under them
+    private var weekdayBars: some View {
+        let averages = weekdays.map(\.average)
+        let best = busiestWeekday
+        return VStack(spacing: 3) {
+            SparkBars(values: averages, color: accent, emphasis: averages.indices.map { $0 == best ? 1 : 0.55 }, tipID: tipID) { i in
+                AnyView(weekdayTip(i))
+            }
+            .frame(height: medium ? nil : 22)
+            HStack(spacing: 0) {
+                ForEach(0..<7, id: \.self) { i in
+                    Text(Fmt.weekdayInitialsFromMonday[i]).font(.app(8)).foregroundStyle(.tertiary)
+                        .frame(maxWidth: .infinity)
+                }
+            }
+            .frame(height: 9)
+        }
+    }
+
+    // MARK: Readouts
+
+    /// One bar: the day itself, or the days it groups
+    private func bucketTip(_ group: ArraySlice<DailyHistoryArchive.DaySummary>, metricRule: Double,
+                           value: (DailyHistoryArchive.DaySummary) -> Double) -> some View {
+        Group {
+            if group.count == 1, let day = group.first {
+                DayDetailTip(day: day, colors: colors, exact: exact, note: kind == .average ? deltaNote(for: day) : nil)
+            } else if let first = group.first, let last = group.last {
+                let groupTokens = group.reduce(0) { $0 + $1.tokens }
+                let groupCost = group.reduce(0) { $0 + $1.cost }
+                let perDay = group.reduce(0) { $0 + value($1) } / Double(group.count)
+                TipCard(title: "\(Fmt.shortDate(first.date)) – \(Fmt.shortDate(last.date))", subtitle: L("\(group.count) days"),
+                        icon: kind.icon, tint: accent, value: kind == .totalCost ? Fmt.money(perDay) : Fmt.tokens(perDay, exact: exact)) {
+                    TipRow(label: L("Daily avg"), value: kind == .totalCost ? Fmt.money(metricRule) : Fmt.tokens(metricRule, exact: exact))
+                    TipRow(label: "Tokens", value: Fmt.tokens(Double(groupTokens), exact: exact))
+                    TipRow(label: L("Cost"), value: Fmt.money(groupCost))
+                    TipRow(label: L("Messages"), value: Fmt.metric(Double(group.reduce(0) { $0 + $1.messages }), .messages, exact: true))
+                }
             }
         }
     }
 
-    private func hoverDay(_ i: Int?, _ p: CGPoint?) {
-        guard let i, let p, report.days.indices.contains(i) else { tip?.hide(tipID); return }
-        let day = report.days[i]
-        let avg = report.stats.averagePerDay
-        let delta = avg > 0 ? (Double(day.tokens) - avg) / avg * 100 : 0
-        tip?.show(tipID, at: p) {
-            DayDetailTip(day: day, colors: colors, exact: exact,
-                         note: day.tokens > 0 ? deltaNote(delta) : nil)
-        }
-    }
-
-    private func deltaNote(_ delta: Double) -> String {
+    /// How far a day sits from the daily average
+    private func deltaNote(for day: DailyHistoryArchive.DaySummary) -> String? {
+        guard day.tokens > 0, stats.averagePerDay > 0 else { return nil }
+        let delta = (Double(day.tokens) - stats.averagePerDay) / stats.averagePerDay * 100
         let pct = String(format: "%.0f%%", abs(delta))
         return delta >= 0 ? L("\(pct) above daily avg") : L("\(pct) below daily avg")
     }
 
-    private func showValue(_ i: Int?, _ p: CGPoint?, _ text: @escaping (Int) -> String) {
-        guard let i, let p, report.days.indices.contains(i) else { tip?.hide(tipID); return }
-        tip?.show(tipID, at: p) {
-            TipCard(title: DayDetailTip.dateTitle(report.days[i].date)) {
-                TipRow(color: accent, label: kind.localizedName, value: text(i))
+    /// Cost per million tokens on one day
+    private func rateTip(_ day: DailyHistoryArchive.DaySummary) -> some View {
+        let rate = day.tokens > 0 ? day.cost / (Double(day.tokens) / 1e6) : 0
+        return TipCard(title: DayDetailTip.dateTitle(day.date), icon: kind.icon, tint: accent, value: L("\(Fmt.money(rate)) / 1M")) {
+            if day.tokens == 0 {
+                Text("No usage this day").font(.app(Typo.small)).foregroundStyle(.tertiary)
+            } else {
+                TipRow(label: "Tokens", value: Fmt.tokens(Double(day.tokens), exact: exact))
+                TipRow(label: L("Cost"), value: Fmt.money(day.cost))
             }
         }
     }
 
-    /// Daily average for Monday…Sunday (each weekday's total in the range / its number of occurrences)
-    private var weekdayAverages: [Double] {
-        var sum = Array(repeating: 0.0, count: 7), count = Array(repeating: 0, count: 7)
+    private func modelTip(_ key: String) -> some View {
+        Group {
+            if let share = report.models.first(where: { $0.key == key }) {
+                TipCard(title: colors.name(share.key), subtitle: ModelPalette.vendor(share.key).localizedName,
+                        icon: kind.icon, tint: colors.color(share.key), value: percent(Double(share.tokens) / modelTotal)) {
+                    TipRow(color: colors.color(share.key), label: "Tokens", value: Fmt.tokens(Double(share.tokens), exact: exact))
+                    TipRow(label: L("Cost"), value: Fmt.money(share.cost))
+                }
+            }
+        }
+    }
+
+    private func weekdayTip(_ i: Int) -> some View {
+        let w = weekdays[i]
+        return TipCard(title: Fmt.weekdaysFromMonday[i], subtitle: L("\(report.range.localizedLabel) · avg per day"),
+                       icon: kind.icon, tint: accent, value: Fmt.tokens(w.average, exact: exact)) {
+            TipRow(color: accent, label: "Tokens", value: Fmt.tokens(w.sum, exact: exact))
+            TipRow(label: L("Active days"), value: "\(w.active) / \(w.count)")
+        }
+    }
+
+    // MARK: Derived
+
+    /// Monday…Sunday: the weekday's total in the range, how often it occurs and how often it had usage
+    private var weekdays: [(sum: Double, count: Int, active: Int, average: Double)] {
+        var sum = Array(repeating: 0.0, count: 7), count = Array(repeating: 0, count: 7), active = Array(repeating: 0, count: 7)
         let cal = Calendar.current
-        for d in report.days {
+        for d in days {
             let w = (cal.component(.weekday, from: RangeAnalytics.date(d.date)) + 5) % 7
             sum[w] += Double(d.tokens)
             count[w] += 1
+            if d.tokens > 0 { active[w] += 1 }
         }
-        return (0..<7).map { count[$0] > 0 ? sum[$0] / Double(count[$0]) : 0 }
+        return (0..<7).map { (sum[$0], count[$0], active[$0], count[$0] > 0 ? sum[$0] / Double(count[$0]) : 0) }
+    }
+
+    private var busiestWeekday: Int? {
+        let averages = weekdays.map(\.average)
+        guard let best = averages.indices.max(by: { averages[$0] < averages[$1] }), averages[best] > 0 else { return nil }
+        return best
     }
 
     private var longestStreak: Int {
         var best = 0, run = 0
-        for d in report.days {
+        for d in days {
             run = d.tokens > 0 ? run + 1 : 0
             best = max(best, run)
         }
@@ -317,151 +473,122 @@ struct StatTile: View {
 
 // MARK: - Mini charts
 
-/// Mini trend (line + fading area). A fixed 40 points, so changing the range morphs point by point instead of redrawing the whole line
-struct Sparkline: View {
-    let values: [Double]
-    var color: Color = .white
-    var height: CGFloat? = nil
-    /// Hover: index in the original series + pointer position
-    var onHover: ((Int?, CGPoint?) -> Void)? = nil
-    @State private var hovered: Int?
-
-    private var points: [(x: Double, y: Double)] {
-        let raw = values.enumerated().map { (Double($0.offset), $0.element) }
-        return resampled(raw.isEmpty ? [(0, 0)] : raw, count: 40)
-    }
-
-    var body: some View {
-        let pts = points
-        Chart {
-            ForEach(Array(pts.enumerated()), id: \.offset) { _, p in
-                AreaMark(x: .value("i", p.x), y: .value("v", p.y))
-                    .interpolationMethod(.monotone)
-                    .foregroundStyle(LinearGradient(colors: [color.opacity(0.22), color.opacity(0)], startPoint: .top, endPoint: .bottom))
-                LineMark(x: .value("i", p.x), y: .value("v", p.y))
-                    .interpolationMethod(.monotone)
-                    .foregroundStyle(color)
-                    .lineStyle(StrokeStyle(lineWidth: 1.4, lineCap: .round, lineJoin: .round))
-            }
-            if let hovered, values.indices.contains(hovered) {
-                RuleMark(x: .value("i", Double(hovered))).foregroundStyle(Color.white.opacity(0.25))
-                PointMark(x: .value("i", Double(hovered)), y: .value("v", values[hovered])).foregroundStyle(color).symbolSize(26)
-            } else if let last = pts.last {
-                PointMark(x: .value("i", last.x), y: .value("v", last.y)).foregroundStyle(color).symbolSize(14)
-            }
-        }
-        .chartXScale(domain: 0...Double(max(1, values.count - 1)))
-        .chartXAxis(.hidden).chartYAxis(.hidden)
-        .chartLegend(.hidden)
-        .chartHover(Double.self) { x, p in
-            guard let onHover else { return }
-            let i = x.map { Int($0.rounded()) }.flatMap { values.indices.contains($0) ? $0 : nil }
-            hovered = i
-            onHover(i, i == nil ? nil : p)
-        }
-        .frame(height: height)
-    }
-}
-
-/// Daily mini bars + average line (daily avg, total cost): bars below the average are fainter
-struct MiniBars: View {
-    let values: [Double]
-    let color: Color
-    let average: Double
-    var onHover: ((Int?, CGPoint?) -> Void)? = nil
-    @State private var hovered: Int?
-
-    var body: some View {
-        let maxValue = max(1e-9, values.max() ?? 0)
-        Chart {
-            ForEach(Array(values.enumerated()), id: \.offset) { i, v in
-                let half = values.count > 60 ? 0.45 : 0.33
-                RectangleMark(xStart: .value("Day", Double(i) - half), xEnd: .value("Day", Double(i) + half),
-                              yStart: .value("Value", 0), yEnd: .value("Value", max(v, maxValue * 0.02)))
-                    .foregroundStyle(v <= 0 ? Color.white.opacity(0.1) : color.opacity(hovered == i ? 1 : v >= average ? 0.85 : 0.4))
-                    .cornerRadius(values.count > 60 ? 0.5 : 1.5)
-            }
-            RuleMark(y: .value("Average", average))
-                .foregroundStyle(Color.white.opacity(0.55))
-                .lineStyle(StrokeStyle(lineWidth: 1, dash: [3, 3]))
-        }
-        .chartXScale(domain: -0.6...(Double(values.count) - 0.4))
-        .chartYScale(domain: 0...(maxValue * 1.05))
-        .chartXAxis(.hidden).chartYAxis(.hidden)
-        .chartHover(Double.self) { x, p in
-            let i = x.map { Int($0.rounded()) }.flatMap { values.indices.contains($0) ? $0 : nil }
-            hovered = i
-            onHover?(i, i == nil ? nil : p)
-        }
-        .animation(.smooth(duration: 0.4), value: values.count)
-    }
-}
-
-/// Peak days: the three highest-usage days in the range, bars scaled to the peak
-struct TopDays: View {
+/// Peak days: the highest-usage days in the range, ranked, bars relative to the best day
+private struct TopDays: View {
     let days: [DailyHistoryArchive.DaySummary]
     let color: Color
-    let exact: Bool
-    var count = 3
-    var onHover: ((DailyHistoryArchive.DaySummary?, CGPoint?) -> Void)? = nil
+    /// Medium: taller rows with more room for the date
+    let roomy: Bool
+    let onHover: (DailyHistoryArchive.DaySummary?, CGPoint?) -> Void
 
     var body: some View {
-        let top = days.filter { $0.tokens > 0 }.sorted { $0.tokens > $1.tokens }.prefix(count)
-        let peak = Double(top.first?.tokens ?? 1)
-        VStack(alignment: .leading, spacing: 2) {
-            ForEach(Array(top.enumerated()), id: \.element.date) { rank, d in
-                HStack(spacing: 5) {
+        let peak = Double(days.first?.tokens ?? 1)
+        VStack(alignment: .leading, spacing: roomy ? 8 : 2) {
+            ForEach(Array(days.enumerated()), id: \.element.date) { rank, d in
+                HStack(spacing: 6) {
                     Text(Fmt.shortDate(d.date)).font(.app(Typo.axis)).foregroundStyle(.tertiary)
-                        .frame(width: 40, alignment: .leading)
-                    GeometryReader { geo in
-                        Capsule().fill(color.opacity(rank == 0 ? 1 : 0.5))
-                            .frame(width: max(3, geo.size.width * Double(d.tokens) / peak))
-                            .frame(maxHeight: .infinity)
-                    }
-                    .frame(height: 5)
+                        .lineLimit(1).minimumScaleFactor(0.8)
+                        .frame(width: roomy ? 46 : 38, alignment: .leading)
+                    DepthBar(fraction: Double(d.tokens) / peak, tint: color, height: roomy ? 6 : 4)
+                        .opacity(rank == 0 ? 1 : 0.7)
+                    Text(Fmt.tokens(Double(d.tokens), exact: false)).font(.num(Typo.axis, .medium)).foregroundStyle(.secondary)
+                        .monospacedDigit().lineLimit(1).fixedSize()
                 }
-                .frame(height: 9)
+                .frame(height: roomy ? 16 : 10)
                 .contentShape(Rectangle())
-                .dashboardHover { p in onHover?(p == nil ? nil : d, p) }
+                .dashboardHover { p in onHover(p == nil ? nil : d, p) }
             }
         }
-        .frame(maxHeight: .infinity, alignment: .bottom)
-        .animation(.smooth(duration: 0.4), value: top.map(\.date))
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: roomy ? .leading : .bottomLeading)
+        .animation(Motion.data, value: days.map(\.date))
     }
 }
 
-/// Active days: one cell per day (active = solid, idle = empty track). Drawn in one pass (Canvas); hover maps coordinates to a date
-struct DayStrip: View {
+/// Active days: one rounded cell per day of the range, lit when it had usage, a groove when not. The cells
+/// run in one row while they stay wide enough and wrap into more rows for long ranges. Drawn in one pass
+/// (Canvas); hover maps coordinates to a day.
+private struct DayStrip: View {
     let days: [DailyHistoryArchive.DaySummary]
     var color: Color = Palette.activity
-    var onHover: ((DailyHistoryArchive.DaySummary?, CGPoint?) -> Void)? = nil
+    let onHover: (DailyHistoryArchive.DaySummary?, CGPoint?) -> Void
     @State private var hovered: Int?
-    @State private var progress = 0.0
+    private var entrance = Entrance()
+    @Environment(HoverTip.self) private var tip: HoverTip?
+
+    init(days: [DailyHistoryArchive.DaySummary], color: Color = Palette.activity, onHover: @escaping (DailyHistoryArchive.DaySummary?, CGPoint?) -> Void) {
+        self.days = days
+        self.color = color
+        self.onHover = onHover
+    }
 
     var body: some View {
         GeometryReader { geo in
-            let n = max(1, days.count)
-            let step = geo.size.width / CGFloat(n)
-            DayStripCanvas(active: days.map { $0.tokens > 0 }, color: color, hovered: hovered, progress: progress)
+            let grid = DayGrid(count: days.count, in: geo.size)
+            DayStripCanvas(progress: entrance.amount, active: days.map { $0.tokens > 0 }, tone: Depth.Tone(color), hovered: hovered, grid: grid)
+                .animation(Motion.hover, value: hovered)
                 .contentShape(Rectangle())
                 .onContinuousHover(coordinateSpace: .local) { phase in
-                    guard case .active(let p) = phase else { hovered = nil; onHover?(nil, nil); return }
-                    let i = min(days.count - 1, max(0, Int(p.x / step)))
-                    guard days.indices.contains(i) else { return }
+                    guard case .active(let p) = phase, tip?.scrolling != true, let i = grid.index(at: p), days.indices.contains(i) else {
+                        hovered = nil
+                        onHover(nil, nil)
+                        return
+                    }
                     hovered = i
                     let origin = geo.frame(in: .named(HoverTip.space)).origin
-                    onHover?(days[i], CGPoint(x: origin.x + p.x, y: origin.y + p.y))
+                    let cell = grid.rect(i)
+                    onHover(days[i], CGPoint(x: origin.x + cell.midX, y: origin.y + cell.minY))
                 }
         }
-        .onAppear { withAnimation(.smooth(duration: 0.7)) { progress = 1 } }
+        .onAppear { entrance.start() }
+    }
+}
+
+/// Where the day cells go: square cells in as few rows as keep them readable
+private struct DayGrid: Equatable {
+    let columns: Int
+    let rows: Int
+    let side: CGFloat
+    let gap: CGFloat
+    let origin: CGPoint
+
+    init(count: Int, in size: CGSize) {
+        let n = max(1, count)
+        let gap: CGFloat = n > 60 ? 1 : 2
+        var best = (rows: 1, side: CGFloat(0))
+        for r in 1...max(1, min(n, 24)) {
+            let cols = Int((Double(n) / Double(r)).rounded(.up))
+            let side = min((size.width - gap * CGFloat(cols - 1)) / CGFloat(cols), (size.height - gap * CGFloat(r - 1)) / CGFloat(r))
+            if side > best.side + 0.01 { best = (r, side) }
+        }
+        rows = best.rows
+        columns = Int((Double(n) / Double(rows)).rounded(.up))
+        side = max(0.5, best.side)
+        self.gap = gap
+        // Flush left, centred vertically
+        let height = CGFloat(rows) * side + CGFloat(rows - 1) * gap
+        origin = CGPoint(x: 0, y: max(0, (size.height - height) / 2))
+    }
+
+    func rect(_ i: Int) -> CGRect {
+        let c = i % columns, r = i / columns
+        return CGRect(x: origin.x + CGFloat(c) * (side + gap), y: origin.y + CGFloat(r) * (side + gap), width: side, height: side)
+    }
+
+    func index(at p: CGPoint) -> Int? {
+        let pitch = side + gap
+        guard pitch > 0 else { return nil }
+        let c = Int(floor((p.x - origin.x + gap / 2) / pitch)), r = Int(floor((p.y - origin.y + gap / 2) / pitch))
+        guard c >= 0, c < columns, r >= 0, r < rows else { return nil }
+        return r * columns + c
     }
 }
 
 private struct DayStripCanvas: View, Animatable {
-    let active: [Bool]
-    let color: Color
-    let hovered: Int?
     var progress: Double
+    let active: [Bool]
+    let tone: Depth.Tone
+    let hovered: Int?
+    let grid: DayGrid
 
     nonisolated var animatableData: Double {
         get { progress }
@@ -471,50 +598,24 @@ private struct DayStripCanvas: View, Animatable {
     var body: some View {
         Canvas { ctx, size in
             let n = max(1, active.count)
-            let gap: CGFloat = n > 60 ? 1 : 2
-            let w = max(1, (size.width - gap * CGFloat(n - 1)) / CGFloat(n))
+            let radius = min(3, grid.side * 0.3)
             for (i, on) in active.enumerated() {
+                // Cells grow in from left to right
                 let t = min(1, max(0, (progress - Double(i) / Double(n) * 0.4) / 0.6))
-                let full = min(size.height, 28)
-                let h = (on ? full * (hovered == i ? 1 : 0.8) : full * 0.25) * t
-                guard h > 0 else { continue }
-                let rect = CGRect(x: CGFloat(i) * (w + gap), y: (size.height - h) / 2, width: w, height: h)
-                let fill = on ? color.opacity(hovered == i ? 1 : 0.85) : Color.white.opacity(hovered == i ? 0.2 : 0.08)
-                ctx.fill(Path(roundedRect: rect, cornerRadius: min(2, w / 2)), with: .color(fill))
-            }
-        }
-    }
-}
-
-/// Average bars for Monday…Sunday; the tallest is solid
-struct WeekdayBars: View {
-    let values: [Double]
-    let color: Color
-    var onHover: ((Int?, CGPoint?) -> Void)? = nil
-    @State private var hovered: Int?
-
-    var body: some View {
-        let maxValue = max(1e-9, values.max() ?? 0)
-        let best = values.indices.max { values[$0] < values[$1] }
-        HStack(alignment: .bottom, spacing: 4) {
-            ForEach(values.indices, id: \.self) { i in
-                VStack(spacing: 2) {
-                    GeometryReader { geo in
-                        RoundedRectangle(cornerRadius: 1.5)
-                            .fill(color.opacity(i == best || i == hovered ? 1 : 0.4))
-                            .frame(height: max(2, geo.size.height * values[i] / maxValue))
-                            .frame(maxHeight: .infinity, alignment: .bottom)
-                    }
-                    Text(Fmt.weekdayInitialsFromMonday[i]).font(.system(size: 8)).foregroundStyle(.tertiary)
+                guard t > 0.01 else { continue }
+                let full = grid.rect(i)
+                let rect = full.insetBy(dx: full.width * (1 - t) / 2, dy: full.height * (1 - t) / 2)
+                if on {
+                    ctx.cell(rect, tone: tone, radius: radius, opacity: hovered == nil || hovered == i ? 1 : 0.7)
+                } else {
+                    let path = Path(roundedRect: rect, cornerRadius: min(radius, rect.width / 2), style: .continuous)
+                    ctx.fill(path, with: .color(Depth.groove))
+                    if rect.width >= 6 { ctx.stroke(path, with: .color(Depth.grooveEdge), lineWidth: 0.5) }
                 }
-                .frame(maxWidth: .infinity)
-                .contentShape(Rectangle())
-                .dashboardHover { p in
-                    hovered = p == nil ? (hovered == i ? nil : hovered) : i
-                    onHover?(p == nil ? nil : i, p)
+                if hovered == i {
+                    ctx.fill(Path(roundedRect: rect, cornerRadius: radius, style: .continuous), with: .color(.white.opacity(0.18)))
                 }
             }
         }
-        .animation(.smooth(duration: 0.4), value: values)
     }
 }

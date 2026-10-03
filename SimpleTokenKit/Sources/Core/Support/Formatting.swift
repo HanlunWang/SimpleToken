@@ -145,7 +145,7 @@ public enum Fmt {
 }
 
 extension DateFormatter {
-    nonisolated(unsafe) static let clock: DateFormatter = {
+    static let clock: DateFormatter = {
         let f = DateFormatter()
         f.dateFormat = "HH:mm"
         return f
@@ -158,18 +158,18 @@ extension DateFormatter {
         return f
     }
 
-    nonisolated(unsafe) static let monthDay = template("MMMd")
-    nonisolated(unsafe) static let longDay = template("yMMMdEEE")
-    nonisolated(unsafe) static let monthOnly = template("MMM")
+    static let monthDay = template("MMMd")
+    static let longDay = template("yMMMdEEE")
+    static let monthOnly = template("MMM")
     /// Reset times: today → "14:30", this week → "Sun 14:30", later → "Oct 7 14:30"
-    nonisolated(unsafe) public static let resetToday = template("HHmm")
-    nonisolated(unsafe) public static let resetWeek = template("EEEHHmm")
-    nonisolated(unsafe) public static let resetLater = template("MMMdHHmm")
+    public static let resetToday = template("HHmm")
+    public static let resetWeek = template("EEEHHmm")
+    public static let resetLater = template("MMMdHHmm")
 }
 
 extension NumberFormatter {
-    nonisolated(unsafe) static let moneyWhole: NumberFormatter = money(fraction: 0)
-    nonisolated(unsafe) static let moneyCents: NumberFormatter = money(fraction: 2)
+    static let moneyWhole: NumberFormatter = money(fraction: 0)
+    static let moneyCents: NumberFormatter = money(fraction: 2)
 
     private static func money(fraction: Int) -> NumberFormatter {
         let f = NumberFormatter()
@@ -180,7 +180,7 @@ extension NumberFormatter {
         return f
     }
 
-    nonisolated(unsafe) static let grouping: NumberFormatter = {
+    static let grouping: NumberFormatter = {
         let f = NumberFormatter()
         f.numberStyle = .decimal
         f.groupingSeparator = ","
