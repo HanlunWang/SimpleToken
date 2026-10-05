@@ -10,7 +10,7 @@ xcodegen generate                              # after adding/removing App files
 xcodebuild -project SimpleToken.xcodeproj -scheme SimpleToken -derivedDataPath build -configuration Release build
 ```
 
-Signing: `Config/Signing.xcconfig` signs ad-hoc; put your identity and team in the git-ignored `Config/Signing.local.xcconfig`. Bundle id `dev.hanlun.simpletoken` (`AppPaths.migrateFromLumenIfNeeded()` imports data from the pre-rename `dev.hanlun.lumen`; keep it). Measure resource use on a **Release** build. `SIMPLETOKEN_TOKSCALE_PATH` overrides the bundled tokscale (used when running the package outside the app bundle).
+Releases: a `vX.Y.Z` tag runs `.github/workflows/release.yml` ([docs/RELEASING.md](docs/RELEASING.md)). Signing: `Config/Signing.xcconfig` signs ad-hoc; put your identity and team in the git-ignored `Config/Signing.local.xcconfig`. Bundle id `dev.hanlun.simpletoken` (`AppPaths.migrateFromLumenIfNeeded()` imports the pre-rename `dev.hanlun.lumen` data; keep it). Measure resource use on a **Release** build. `SIMPLETOKEN_TOKSCALE_PATH` overrides the bundled tokscale (used when running the package outside the app bundle).
 
 ## Layout
 

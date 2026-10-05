@@ -128,7 +128,7 @@ CODE_SIGN_IDENTITY = Apple Development
 DEVELOPMENT_TEAM = YOUR_TEAM_ID
 ```
 
-Run the unit tests with `cd SimpleTokenKit && swift test`. `scripts/release.sh` builds a Developer ID signed zip and, with `NOTARY_PROFILE` set, notarizes it.
+Run the unit tests with `cd SimpleTokenKit && swift test`. Releases are built, signed and notarized by GitHub Actions when a version tag is pushed; see [docs/RELEASING.md](docs/RELEASING.md).
 
 ## Where the data comes from
 

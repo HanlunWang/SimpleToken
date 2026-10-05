@@ -25,7 +25,7 @@ public struct TokscaleRunner: Sendable {
         self.allTimeSince = allTimeSince
     }
 
-    /// Binary lookup: app bundle Resources → environment variable → source repo (development / tests)
+    /// Binary lookup: app bundle Resources → environment variable → source repo (debug builds and tests)
     public static func locateBinary() -> URL? {
         var candidates: [URL] = []
         if let res = Bundle.main.resourceURL {
@@ -34,13 +34,16 @@ public struct TokscaleRunner: Sendable {
         if let env = ProcessInfo.processInfo.environment["SIMPLETOKEN_TOKSCALE_PATH"] {
             candidates.append(URL(fileURLWithPath: env))
         }
-        // Development path: SimpleTokenKit/Sources/Core/Collector/ → repo root/Resources/tokscale
+        #if DEBUG
+        // Development path: SimpleTokenKit/Sources/Core/Collector/ → repo root/Resources/tokscale.
+        // Debug only: #filePath would put the build machine's source path into release binaries.
         let dev = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent()
             .deletingLastPathComponent().deletingLastPathComponent()
             .deletingLastPathComponent()
             .appendingPathComponent("Resources/tokscale/tokscale")
         candidates.append(dev)
+        #endif
         return candidates.first { FileManager.default.isExecutableFile(atPath: $0.path) }
     }
 

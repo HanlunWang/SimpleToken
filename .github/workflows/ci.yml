@@ -1,0 +1,40 @@
+# Builds and tests every push to main and every pull request. No secrets: the app is signed ad-hoc.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: xcode-27
+    timeout-minutes: 40
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_27.0.app/Contents/Developer
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Unit tests
+        working-directory: SimpleTokenKit
+        run: swift test
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Build the app
+        run: |
+          xcodegen generate
+          xcodebuild -project SimpleToken.xcodeproj -scheme SimpleToken -configuration Release \
+            -destination 'generic/platform=macOS' -derivedDataPath build ARCHS=arm64 \
+            CODE_SIGN_IDENTITY=- DEVELOPMENT_TEAM= build | grep -E "error:|warning:|BUILD"

@@ -6,3 +6,9 @@ xcuserdata/
 *.xcuserstate
 Config/Signing.local.xcconfig
 dist/
+# Signing and notarization material: never commit
+*.p12
+*.p8
+*.cer
+*.mobileprovision
+*.keychain-db
