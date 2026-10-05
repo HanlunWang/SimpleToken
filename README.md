@@ -80,13 +80,7 @@ Optional notifications when a limit crosses thresholds you choose. Settings cove
 
 ## Install
 
-Download `SimpleToken-<version>.zip` from [Releases](https://github.com/HanlunWang/SimpleToken/releases), unzip it and move `SimpleToken.app` to `/Applications`. It needs macOS 26 or later on Apple silicon.
-
-If macOS says the app cannot be checked for malicious software (a release that is signed but not yet notarized), open it once with right-click → **Open**, or run:
-
-```bash
-xattr -dr com.apple.quarantine /Applications/SimpleToken.app
-```
+Download `SimpleToken-<version>.zip` from [Releases](https://github.com/HanlunWang/SimpleToken/releases), unzip it and move `SimpleToken.app` to `/Applications`. It needs macOS 26 or later on Apple silicon. Releases are signed with a Developer ID and notarized by Apple, so the app opens without a warning.
 
 SimpleToken lives in the menu bar. Click its icon for the panel, or ⌥-click for the main window.
 
