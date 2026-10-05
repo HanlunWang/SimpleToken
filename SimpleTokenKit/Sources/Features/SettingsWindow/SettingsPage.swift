@@ -91,11 +91,15 @@ struct SettingsPage: View {
                 OrderedListEditor(options: SettingsStore.MenuBarItem.allCases.map { ($0.rawValue, $0.localizedName) },
                                   selected: $settings.menuBarItems, emptyText: L("Icon only"))
             }
-            SettingsRow(L("Style")) {
-                GlassSegmented(MenuBarRenderer.Style.allCases.map { ($0.rawValue, $0.localizedName) }, selection: $settings.menuBarStyle)
+            SettingsRow(L("Style"), detail: L("Each style drawn with your current items"), vertical: true) {
+                MenuBarStyleGallery(state: state)
             }
             SettingsRow(L("Show labels"), detail: settings.menuBarStyle == "stacked" ? L("The two-line style always shows labels") : L("e.g. “5h” or “Today” before the value")) {
                 MiniToggle(isOn: $settings.menuBarShowLabels).disabled(settings.menuBarStyle == "stacked")
+            }
+            SettingsRow(L("Pace and projection"), detail: L("Rings and bars mark where even use would be by now, and fade on to where the window is heading by its reset")) {
+                MiniToggle(isOn: $settings.menuBarShowPace)
+                    .disabled(!["ring", "rings", "bar"].contains(settings.menuBarStyle))
             }
             SettingsRow(L("Show SimpleToken icon")) {
                 MiniToggle(isOn: $settings.menuBarShowIcon).disabled(settings.menuBarItems.isEmpty)
@@ -538,6 +542,48 @@ struct MenuBarPreview: View {
             .frame(height: 24)
             .background(RoundedRectangle(cornerRadius: 6).fill(dark ? Color(white: 0.16) : Color(white: 0.9)))
             .environment(\.colorScheme, dark ? .dark : .light)
+    }
+}
+
+/// Every menu bar style drawn with the current items on a dark menu bar strip; a click picks one
+struct MenuBarStyleGallery: View {
+    let state: AppState
+    @Bindable private var settings = SettingsStore.shared
+
+    var body: some View {
+        let segments = MenuBarContent.segments(state: state)
+        FlowLayout(spacing: 8, lineSpacing: 8) {
+            ForEach(MenuBarRenderer.Style.allCases, id: \.self) { style in
+                let image = MenuBarRenderer.image(segments, style: style, showIcon: settings.menuBarShowIcon,
+                                                  showLabels: settings.menuBarShowLabels, height: 24)
+                let selected = settings.menuBarStyle == style.rawValue
+                Button {
+                    settings.menuBarStyle = style.rawValue
+                } label: {
+                    VStack(alignment: .leading, spacing: 5) {
+                        Image(nsImage: image)
+                            .renderingMode(image.isTemplate ? .template : .original)
+                            .foregroundStyle(Color.white)
+                            .padding(.horizontal, 8)
+                            .frame(height: 24)
+                            .background(RoundedRectangle(cornerRadius: 6, style: .continuous).fill(Color(white: 0.16)))
+                            .environment(\.colorScheme, .dark)
+                        Text(style.localizedName)
+                            .font(.app(Typo.small, selected ? .semibold : .regular))
+                            .foregroundStyle(selected ? .primary : .secondary)
+                    }
+                    .padding(6)
+                    .background(RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .fill(selected ? Color.white.opacity(0.08) : Color.clear))
+                    .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .strokeBorder(selected ? Color.white.opacity(0.35) : Palette.hairline, lineWidth: 1))
+                    .contentShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(style.localizedName)
+                .accessibilityAddTraits(selected ? .isSelected : [])
+            }
+        }
     }
 }
 

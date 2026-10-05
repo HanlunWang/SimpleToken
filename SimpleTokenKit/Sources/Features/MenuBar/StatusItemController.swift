@@ -3,7 +3,7 @@ import SwiftUI
 import Core
 import DesignSystem
 
-/// Menu bar item: the whole content is drawn as one image (mark + number segments; single line / two-line / ring / bar).
+/// Menu bar item: the whole content is drawn as one image (mark + number, gauge and chart segments; see MenuBarRenderer).
 /// Content, style, labels and icon are configured in Settings → Menu Bar.
 @MainActor
 public final class StatusItemController {
@@ -28,12 +28,17 @@ public final class StatusItemController {
 
         // Data-driven: redraw when content or settings change (identical content is not redrawn)
         observeContinuously { [weak self] in self?.render() }
-        // Countdown content ticks every 30 seconds
+        // Content that moves with the clock (the reset countdown, pace markers, the current hour) is checked every
+        // 30 seconds; render() redraws only when the drawn content changed
         ticker = Task { @MainActor [weak self] in
             while !Task.isCancelled {
                 try? await Task.sleep(for: .seconds(30))
                 guard let self else { return }
-                if SettingsStore.shared.menuBarEntries.contains(.sessionReset) { self.render() }
+                let settings = SettingsStore.shared
+                let entries = settings.menuBarEntries
+                let clockBound = entries.contains(.sessionReset) || entries.contains(.todayHours)
+                    || (settings.menuBarShowPace && entries.contains { $0.provider != nil })
+                if clockBound { self.render() }
             }
         }
     }

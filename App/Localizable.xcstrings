@@ -813,6 +813,17 @@
         }
       }
     },
+    "7d": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "7天"
+          }
+        }
+      }
+    },
     "A ribbon runs from each tool to every model it used, as thick as the tokens it carried.": {
       "extractionState": "manual",
       "localizations": {
@@ -1722,6 +1733,17 @@
           "stringUnit": {
             "state": "translated",
             "value": "每个额度窗口（会话 / 本周…）在一个周期内，每条提醒线只通知一次。菜单栏的标红用最高的那条线。"
+          }
+        }
+      }
+    },
+    "Each style drawn with your current items": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "用当前显示内容画出的各样式"
           }
         }
       }
@@ -2785,6 +2807,17 @@
         }
       }
     },
+    "Nested rings": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "同心环"
+          }
+        }
+      }
+    },
     "New input that missed the cache": {
       "extractionState": "manual",
       "localizations": {
@@ -3122,6 +3155,17 @@
           "stringUnit": {
             "state": "translated",
             "value": "输出"
+          }
+        }
+      }
+    },
+    "Pace and projection": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "匀速标记与预测"
           }
         }
       }
@@ -3573,6 +3617,17 @@
           "stringUnit": {
             "state": "translated",
             "value": "环形"
+          }
+        }
+      }
+    },
+    "Rings and bars mark where even use would be by now, and fade on to where the window is heading by its reset": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "环和条标出匀速使用此刻应到的位置，并用浅色延伸到按当前速度重置前会用到的位置"
           }
         }
       }
@@ -4255,6 +4310,17 @@
           "stringUnit": {
             "state": "translated",
             "value": "今天 %@"
+          }
+        }
+      }
+    },
+    "Today by hour (Claude Code)": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "今天每小时（Claude Code）"
           }
         }
       }

@@ -56,10 +56,10 @@ Charts are drawn with a shared kit: rounded, softly lit marks that morph when yo
 
 ### Menu bar
 
-Show any mix of Claude and Codex limits, today's tokens or cost, this month's cost and the session reset countdown, as plain text, two lines, mini rings or progress bars. Values turn red near the limit.
+Show any mix of Claude and Codex limits, today's tokens or cost, this month's cost, the session reset countdown, and small charts of today by hour and the last seven days. Six styles fit them into the menu bar: one line, two lines, compact (two rows), rings, nested rings in the spirit of Activity, and progress bars. Rings and bars mark where even use would be by now and fade on to where the window is heading by its reset. Values turn red near the limit.
 
 <p align="center">
-  <img src="docs/images/menubar.png" width="520" alt="Menu bar styles">
+  <img src="docs/images/menubar.png" width="560" alt="Menu bar styles">
 </p>
 
 ### Drop-down panel

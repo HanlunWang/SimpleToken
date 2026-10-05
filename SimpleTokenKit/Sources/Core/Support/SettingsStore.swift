@@ -62,6 +62,7 @@ public final class SettingsStore {
         case codexSession = "codex.session", codexWeekly = "codex.weekly"
         case todayTokens = "today.tokens", todayCost = "today.cost", monthCost = "month.cost"
         case sessionReset = "claude.reset"
+        case todayHours = "today.hours", lastWeek = "week.days"
         public var id: String { rawValue }
 
         public var localizedName: String {
@@ -75,6 +76,8 @@ public final class SettingsStore {
             case .todayCost: L("Today's cost")
             case .monthCost: L("This month's cost")
             case .sessionReset: L("Session reset countdown")
+            case .todayHours: L("Today by hour (Claude Code)")
+            case .lastWeek: L("Last 7 days")
             }
         }
         /// Small label shown in the menu bar
@@ -86,6 +89,8 @@ public final class SettingsStore {
             case .todayTokens, .todayCost: L("today")
             case .monthCost: L("month")
             case .sessionReset: L("reset")
+            case .todayHours: L("today")
+            case .lastWeek: L("7d")
             }
         }
         /// Provider of a limit item (claude / codex); nil for the rest
@@ -99,7 +104,7 @@ public final class SettingsStore {
         /// Needs live usage (today / this month)
         public var needsLiveUsage: Bool {
             switch self {
-            case .todayTokens, .todayCost, .monthCost: true
+            case .todayTokens, .todayCost, .monthCost, .todayHours, .lastWeek: true
             default: false
             }
         }
@@ -109,7 +114,8 @@ public final class SettingsStore {
     public var menuBarItems: [String] {
         didSet { defaults.set(menuBarItems, forKey: "menuBarItems") }
     }
-    /// Menu bar style: text (one line) / stacked (two lines, label on top) / ring (limits as small rings) / bar (a progress bar under each limit)
+    /// Menu bar style: text (one line) / stacked (two lines, label on top) / dense (two items per column) /
+    /// ring (limits as small rings) / rings (all limits nested in one ring) / bar (a progress bar under each limit)
     public var menuBarStyle: String {
         didSet { defaults.set(menuBarStyle, forKey: "menuBarStyle") }
     }
@@ -123,6 +129,10 @@ public final class SettingsStore {
     }
     public var menuBarShowIcon: Bool {
         didSet { defaults.set(menuBarShowIcon, forKey: "menuBarShowIcon") }
+    }
+    /// Rings and bars mark where even use would be by now and how far the window is heading by its reset
+    public var menuBarShowPace: Bool {
+        didSet { defaults.set(menuBarShowPace, forKey: "menuBarShowPace") }
     }
     public var menuBarEntries: [MenuBarItem] { menuBarItems.compactMap(MenuBarItem.init(rawValue:)) }
 
@@ -555,6 +565,7 @@ public final class SettingsStore {
         menuBarShowLabels = bool("menuBarShowLabels", false)
         menuBarAlertColor = bool("menuBarAlertColor", true)
         menuBarShowIcon = bool("menuBarShowIcon", true)
+        menuBarShowPace = bool("menuBarShowPace", true)
         panelSections = d.stringArray(forKey: "panelSections") ?? ["claude", "codex", "today", "models"]
         panelWidth = int("panelWidth", 340)
         panelLimitStyle = string("panelLimitStyle", "rings")

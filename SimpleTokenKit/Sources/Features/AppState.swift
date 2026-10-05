@@ -70,7 +70,9 @@ public final class AppState {
             let menuBarNeedsToday = settings.menuBarEntries.contains { $0.needsLiveUsage }
             let live = visible || menuBarNeedsToday
             if self.usage.liveUpdatesEnabled != live { self.usage.liveUpdatesEnabled = live }
-            if self.intraday.paused == visible { self.intraday.paused = !visible }
+            // The intraday scan runs while something shows it: a window, or the menu bar's hourly chart
+            let intradayLive = visible || settings.menuBarEntries.contains(.todayHours)
+            if self.intraday.paused == intradayLive { self.intraday.paused = !intradayLive }
         }
     }
 
