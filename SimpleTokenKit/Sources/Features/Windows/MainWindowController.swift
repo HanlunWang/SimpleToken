@@ -7,29 +7,14 @@ import Core
 /// Closing drops the SwiftUI view tree (frees memory, no redraws on data changes while hidden); reopening rebuilds it.
 @MainActor
 public final class MainWindowController: NSObject, NSWindowDelegate {
-    private let window: NSWindow
+    private var window: NSWindow
     private let state: AppState
-    /// The size the user dragged the window to while macOS still had it in a tile (see `windowDidResize`)
-    private var resizedInTile: NSRect?
-    private var restoringSize = false
+    /// The tile and frame the window had when a live resize began
+    private var resizeStart: (tile: String?, frame: NSRect)?
 
     public init(state: AppState) {
         self.state = state
-        let size = NSSize(width: 900, height: 780)
-        window = NSWindow(contentRect: NSRect(origin: .zero, size: size),
-                          styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
-                          backing: .buffered, defer: false)
-        window.titleVisibility = .hidden
-        window.titlebarAppearsTransparent = true
-        window.titlebarSeparatorStyle = .none   // no hard separator under the top bar's soft scroll fade
-        window.isMovableByWindowBackground = true
-        window.backgroundColor = NSColor(red: 0.051, green: 0.051, blue: 0.059, alpha: 1)
-        window.isOpaque = true
-        window.appearance = NSAppearance(named: .darkAqua)
-        window.isReleasedWhenClosed = false
-        window.minSize = NSSize(width: 380, height: 420)   // the layout adapts to width, so the window can shrink small
-        window.title = "SimpleToken"
-        window.contentView = NSView()
+        window = Self.makeWindow()
         window.center()
         Self.dropSavedTile(Self.frameName)
         let saved = Self.savedFrame(Self.frameName)
@@ -41,11 +26,28 @@ public final class MainWindowController: NSObject, NSWindowDelegate {
         applyFloating()
     }
 
+    private static func makeWindow() -> NSWindow {
+        let window = NSWindow(contentRect: NSRect(origin: .zero, size: NSSize(width: 900, height: 780)),
+                              styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
+                              backing: .buffered, defer: false)
+        window.titleVisibility = .hidden
+        window.titlebarAppearsTransparent = true
+        window.titlebarSeparatorStyle = .none   // no hard separator under the top bar's soft scroll fade
+        window.isMovableByWindowBackground = true
+        window.backgroundColor = NSColor(red: 0.051, green: 0.051, blue: 0.059, alpha: 1)
+        window.isOpaque = true
+        window.appearance = NSAppearance(named: .darkAqua)
+        window.isReleasedWhenClosed = false
+        window.minSize = NSSize(width: 380, height: 420)   // the layout adapts to width, so the window can shrink small
+        window.title = "SimpleToken"
+        window.contentView = NSView()
+        return window
+    }
+
     private static let frameName = "SimpleTokenMainWindow"
 
-    /// AppKit saves a tiled window's tile (Fill, a half, a quarter) along with its frame and restores it at launch.
-    /// A restored tile survives resizing the window by hand, so macOS puts the window back into the tile after
-    /// Show Desktop, Stage Manager or Mission Control. Keep the saved size and position; drop the tile.
+    /// AppKit saves a tiled window's tile (Fill, a half, a quarter) along with its frame and restores it at launch,
+    /// also when the saved frame is no longer the tile's size. Keep the saved size and position; drop the tile.
     private static func dropSavedTile(_ name: String) {
         let key = "NSWindow Frame \(name)"
         guard let saved = UserDefaults.standard.string(forKey: key), let brace = saved.firstIndex(of: "{") else { return }
@@ -90,42 +92,56 @@ public final class MainWindowController: NSObject, NSWindowDelegate {
         return false
     }
 
-    // MARK: Sizes inside a tile
+    // MARK: Leaving a tile
     //
-    // macOS keeps a tiled window (Fill, a half…) in its tile even after the user resizes it by hand, and puts it
-    // back into the tile after Show Desktop or Stage Manager; no public API takes a window out of its tile.
-    // So the size the user dragged to is remembered and restored when the system snaps the window back without
-    // anyone asking. Moving the window takes it out of the tile, so a move forgets that size.
+    // macOS keeps a tiled window (Fill, a half…) in its tile after the user resizes it by hand, and snaps it back to
+    // the tile's size after Show Desktop, Stage Manager or Mission Control; every app's windows do this. No public
+    // API takes a window out of its tile, but a new window is in none. So when a resize ends inside a tile, the
+    // content moves to a fresh window with the same frame, and the size the user chose is simply the window's size.
+
+    public func windowWillStartLiveResize(_ notification: Notification) {
+        resizeStart = (Self.tile(of: window), window.frame)
+    }
 
     public func windowDidEndLiveResize(_ notification: Notification) {
-        resizedInTile = Self.isTiled(window) ? window.frame : nil
+        defer { resizeStart = nil }
+        // Entering a tile, or changing to another one, also ends a "live resize". Only a resize that began and ended
+        // in the same tile, with a different frame, is the user dragging an edge.
+        guard let tile = Self.tile(of: window), let start = resizeStart, start.tile == tile, start.frame != window.frame else { return }
+        // Once the resize has finished handling its own events
+        DispatchQueue.main.async { [weak self] in self?.leaveTile() }
     }
 
-    public func windowWillMove(_ notification: Notification) {
-        resizedInTile = nil
+    private func leaveTile() {
+        let old = window
+        guard Self.tile(of: old) != nil, old.isVisible, !old.inLiveResize else { return }
+        let fresh = Self.makeWindow()
+        fresh.setFrame(old.frame, display: false)
+        // One window at a time owns the saved frame; the fresh one saves it without the tile
+        old.setFrameAutosaveName("")
+        old.delegate = nil
+        fresh.saveFrame(usingName: Self.frameName)
+        fresh.setFrameAutosaveName(Self.frameName)
+        fresh.delegate = self
+        // The hosting view moves over as it is: the dashboard keeps its state and scroll position
+        let content = old.contentView
+        old.contentView = NSView()
+        fresh.contentView = content
+        window = fresh
+        applyFloating()
+        // Swap in place, without the open and close animations
+        fresh.animationBehavior = .none
+        old.animationBehavior = .none
+        fresh.order(.above, relativeTo: old.windowNumber)
+        if old.isKeyWindow { fresh.makeKey() }
+        old.orderOut(nil)
+        fresh.animationBehavior = .default
     }
 
-    public func windowDidResize(_ notification: Notification) {
-        guard let target = resizedInTile, !restoringSize, !window.inLiveResize, window.frame != target else { return }
-        // A change made in this app (the green button's tile menu) has a click or key press right before it
-        if let event = NSApp.currentEvent, ProcessInfo.processInfo.systemUptime - event.timestamp < 0.5 {
-            resizedInTile = nil
-            return
-        }
-        // Wait for the system to finish placing the window (Show Desktop moves it off screen and back)
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) { [weak self] in
-            guard let self, let target = self.resizedInTile, self.window.isVisible, Self.isTiled(self.window),
-                  self.window.frame != target, let area = self.window.screen?.visibleFrame,
-                  area.contains(self.window.frame), area.contains(target) else { return }
-            self.restoringSize = true
-            self.window.setFrame(target, display: true, animate: true)
-            self.restoringSize = false
-        }
-    }
-
-    /// Whether macOS has the window in a tile; AppKit records the tile in the window's frame descriptor
-    private static func isTiled(_ window: NSWindow) -> Bool {
-        window.frameDescriptor.contains("tilingState")
+    /// The tile macOS has the window in (the tile part of its frame descriptor, which AppKit also saves), nil in none
+    private static func tile(of window: NSWindow) -> String? {
+        let descriptor = window.frameDescriptor
+        return descriptor.firstIndex(of: "{").map { String(descriptor[$0...]) }
     }
 
     // Minimised to the Dock also counts as not visible (the view tree is kept for a faster restore)
