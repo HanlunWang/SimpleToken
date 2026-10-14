@@ -1,7 +1,7 @@
 import Foundation
 import Observation
 
-/// Limit state (Claude + Codex): each refreshes every 5 minutes, again 30 s after a window reset, with
+/// Limit state (Claude, Codex, Cursor): each refreshes every 5 minutes, again 30 s after a window reset, with
 /// exponential backoff (5 s → 5 min, half jitter). A rotated Claude cookie is written back at once (or it dies).
 @Observable
 @MainActor
@@ -14,8 +14,10 @@ public final class LimitsStore {
 
     public private(set) var claude: ProviderLimits?
     public private(set) var codex: ProviderLimits?
+    public private(set) var cursor: ProviderLimits?
     public private(set) var claudeStatus: Status = .idle
     public private(set) var codexStatus: Status = .idle
+    public private(set) var cursorStatus: Status = .idle
 
     /// For older callers: the Claude snapshot
     public var limits: ProviderLimits? { claude }
@@ -28,11 +30,22 @@ public final class LimitsStore {
     public init() {}
 
     /// Demo mode: synthetic limits, no probing
-    public func loadDemo(claude: ProviderLimits, codex: ProviderLimits) {
+    public func loadDemo(claude: ProviderLimits, codex: ProviderLimits, cursor: ProviderLimits) {
         self.claude = claude
         self.codex = codex
+        self.cursor = cursor
         claudeStatus = .ok
         codexStatus = .ok
+        cursorStatus = .ok
+    }
+
+    /// The snapshot and status of a provider
+    public func snapshot(_ provider: LimitProvider) -> (limits: ProviderLimits?, status: Status) {
+        switch provider {
+        case .claude: (claude, claudeStatus)
+        case .codex: (codex, codexStatus)
+        case .cursor: (cursor, cursorStatus)
+        }
     }
 
     public func start() {
@@ -50,6 +63,12 @@ public final class LimitsStore {
                     try? await Task.sleep(for: .seconds(delay))
                 }
             },
+            Task { [weak self] in
+                while !Task.isCancelled {
+                    let delay = await self?.refreshCursor() ?? 300
+                    try? await Task.sleep(for: .seconds(delay))
+                }
+            },
         ]
     }
 
@@ -58,6 +77,7 @@ public final class LimitsStore {
     public func refreshNow() {
         Task { _ = await refreshClaude() }
         Task { _ = await refreshCodex() }
+        Task { _ = await refreshCursor() }
     }
 
     // MARK: - Claude
@@ -149,6 +169,26 @@ public final class LimitsStore {
         } catch {
             codexStatus = .failed(String(describing: error))
             return backoffDelay(.codex)
+        }
+    }
+
+    // MARK: - Cursor
+
+    private func refreshCursor() async -> Double {
+        guard let token = CursorProbe.locateToken() else {
+            cursorStatus = .notConfigured
+            return 900
+        }
+        cursorStatus = .probing
+        do {
+            let limits = try await CursorProbe(token: token).probe()
+            cursor = limits
+            cursorStatus = .ok
+            failures[.cursor] = 0
+            return nextRegularDelay(limits)
+        } catch {
+            cursorStatus = .failed(String(describing: error))
+            return backoffDelay(.cursor)
         }
     }
 

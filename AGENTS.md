@@ -51,4 +51,4 @@ Release build, 2026-09-29: ~110 MB footprint with the window open, ~0.3% CPU idl
 
 ## Data sources and gotchas
 
-Details (tokscale scans, the intraday scanner, Claude / Codex limit probes, legacy import) are in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). Two rules that must not be broken: tokscale's period scans stay serial, and every spawned CLI gets `ProcessRunner.cleanEnvironment()` (an inherited `CLAUDE_CODE_*` turns a child `claude` into an API-billed session).
+Details (tokscale scans, the Cursor sync, the intraday scanner, Claude / Codex / Cursor limit probes, legacy import) are in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). Two rules that must not be broken: tokscale's period scans stay serial, and every spawned CLI gets `ProcessRunner.cleanEnvironment()` (an inherited `CLAUDE_CODE_*` turns a child `claude` into an API-billed session).

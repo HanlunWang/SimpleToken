@@ -33,6 +33,8 @@ public final class UsageStore {
     public var minWatchInterval: TimeInterval = 30
     /// Full rescan interval (seconds)
     public var fullInterval: TimeInterval = 900
+    /// Runs before every full scan (the Cursor usage sync, so the scans read a fresh cache)
+    public var beforeFullScan: (@Sendable () async -> Void)?
     /// Live collection switch: AppState turns it off when no UI is visible and the menu bar shows no today numbers
     public var liveUpdatesEnabled = true {
         didSet {
@@ -126,6 +128,7 @@ public final class UsageStore {
     private func runFullTick() async throws {
         isCollecting = true
         defer { isCollecting = false }
+        await beforeFullScan?()
         let clock = Date()                      // single clock, captured before scanning
         let dayKey = Fmt.dayKey(clock)
         // Serial scans (concurrent ones triple CPU/IO)

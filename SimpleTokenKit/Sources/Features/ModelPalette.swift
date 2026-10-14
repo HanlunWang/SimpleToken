@@ -5,13 +5,15 @@ import DesignSystem
 
 /// Entity colours: colours follow the model / tool, not the selected range or ranking.
 public enum ModelPalette {
-    /// Default tool (provider) colours: Claude terracotta, Codex teal, Copilot indigo, others grey
+    /// Default tool (provider) colours: Claude terracotta, Codex teal, Copilot indigo, Grok Bot violet, others grey
     public static func defaultToolColor(_ id: String) -> Color {
         switch id.lowercased() {
         case "claude": Palette.claude
         case "codex": Palette.teal
         case "copilot": Palette.indigo
         case "gemini": Color(hex: "#6b8fd6")
+        case "grokbot", "grok": Palette.xai
+        case "cursor": Color(hex: "#b48fe0")   // the lighter step of the xAI ladder: the same account as Grok Bot
         default: Palette.other
         }
     }
@@ -24,7 +26,7 @@ public enum ModelPalette {
 
     public static let toolLabels: [String: String] = [
         "claude": "Claude Code", "codex": "Codex", "copilot": "Copilot",
-        "opencode": "OpenCode", "gemini": "Gemini", "cursor": "Cursor", "kiro": "Kiro",
+        "opencode": "OpenCode", "gemini": "Gemini", "cursor": "Cursor", "grokbot": "Grok Bot", "grok": "Grok Build", "kiro": "Kiro",
     ]
 
     public static func toolLabel(_ id: String) -> String {
@@ -43,18 +45,19 @@ public enum ModelPalette {
     // MARK: Vendors
 
     public enum Vendor: String, CaseIterable, Sendable {
-        case anthropic, openai, google, other
+        case anthropic, openai, google, xai, other
 
         public var localizedName: String {
             switch self {
             case .anthropic: "Anthropic"
             case .openai: "OpenAI"
             case .google: "Google"
+            case .xai: "xAI"
             case .other: L("Other")
             }
         }
 
-        /// Vendor base colour: matches the tool colour (Claude terracotta, OpenAI/Codex teal, Google indigo)
+        /// Vendor base colour: matches the tool colour (Claude terracotta, OpenAI/Codex teal, Google indigo, xAI violet)
         public var base: Color { ladder[0] }
 
         /// Colours taken in usage-rank order within a vendor: base → very light → very dark → hue-shifted light;
@@ -64,6 +67,7 @@ public enum ModelPalette {
             case .anthropic: ["#c17755", "#f8d7be", "#6e3a28", "#f59aa1"].map(Color.init(hex:))
             case .openai: ["#209993", "#b3e6e2", "#185a56", "#72b4d8"].map(Color.init(hex:))
             case .google: ["#505ba7", "#c5ccf2", "#323a70", "#8fa3e0"].map(Color.init(hex:))
+            case .xai: ["#8f7ee6", "#d6cff7", "#4d418f", "#b48fe0"].map(Color.init(hex:))
             case .other: ["#8a8a8e", "#c8c8cc", "#5a5a5e", "#a8a8ac"].map(Color.init(hex:))
             }
         }
@@ -78,6 +82,7 @@ public enum ModelPalette {
         if ["claude", "opus", "sonnet", "haiku", "fable", "mythos"].contains(where: m.contains) { return .anthropic }
         if m.contains("gpt") || m.contains("codex") || m.hasPrefix("o1") || m.hasPrefix("o3") || m.hasPrefix("o4") { return .openai }
         if m.contains("gemini") { return .google }
+        if m.contains("grok") { return .xai }
         return .other
     }
 }

@@ -47,7 +47,8 @@ public struct DailyHistoryArchive: Codable, Equatable, Sendable {
             // 1) Aggregate within the graph (duplicate observations are summed)
             var incoming: [String: Observation] = [:]
             for client in day.clients ?? [] {
-                guard let name = client.client, let model = client.modelId else { continue }
+                guard let rawName = client.client, let model = client.modelId else { continue }
+                let name = TokscaleReport.normalizeClient(rawName, model: model)
                 let tokens = client.collapsedTokens
                 let cost = max(0, client.cost ?? 0)
                 let messages = max(0, client.messages ?? 0)
@@ -154,7 +155,7 @@ public struct DailyHistoryArchive: Codable, Equatable, Sendable {
             .map { day in
                 var summary = DaySummary(date: day.date, activeTimeMs: day.activeTimeMs ?? 0)
                 for obs in day.observations.values {
-                    let client = TokscaleReport.normalizeClient(obs.client)
+                    let client = TokscaleReport.normalizeClient(obs.client, model: obs.modelId)
                     guard filter.includes(client: client, model: obs.modelId) else { continue }
                     summary.tokens += obs.tokens
                     summary.cost += obs.cost
@@ -182,7 +183,7 @@ public struct DailyHistoryArchive: Codable, Equatable, Sendable {
         var clients: [String: (Int, Double, String)] = [:]
         for day in days.values {
             for obs in day.observations.values {
-                let client = TokscaleReport.normalizeClient(obs.client)
+                let client = TokscaleReport.normalizeClient(obs.client, model: obs.modelId)
                 var m = models[obs.modelId] ?? ([], 0, 0, "")
                 m.0.insert(client); m.1 += obs.tokens; m.2 += obs.cost; m.3 = max(m.3, day.date)
                 models[obs.modelId] = m

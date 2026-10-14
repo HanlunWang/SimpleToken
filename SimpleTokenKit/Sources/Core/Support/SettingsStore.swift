@@ -60,6 +60,7 @@ public final class SettingsStore {
     public enum MenuBarItem: String, CaseIterable, Sendable, Identifiable {
         case claudeSession = "claude.session", claudeWeekly = "claude.weekly", claudeFable = "claude.fable"
         case codexSession = "codex.session", codexWeekly = "codex.weekly"
+        case cursorWeekly = "cursor.weekly"
         case todayTokens = "today.tokens", todayCost = "today.cost", monthCost = "month.cost"
         case sessionReset = "claude.reset"
         case todayHours = "today.hours", lastWeek = "week.days"
@@ -72,6 +73,7 @@ public final class SettingsStore {
             case .claudeFable: L("Claude Fable limit")
             case .codexSession: L("Codex 5-hour limit")
             case .codexWeekly: L("Codex weekly limit")
+            case .cursorWeekly: L("Cursor weekly limit")
             case .todayTokens: L("Today's tokens")
             case .todayCost: L("Today's cost")
             case .monthCost: L("This month's cost")
@@ -84,7 +86,7 @@ public final class SettingsStore {
         public var shortLabel: String {
             switch self {
             case .claudeSession, .codexSession: "5h"
-            case .claudeWeekly, .codexWeekly: L("wk")
+            case .claudeWeekly, .codexWeekly, .cursorWeekly: L("wk")
             case .claudeFable: "Fable"
             case .todayTokens, .todayCost: L("today")
             case .monthCost: L("month")
@@ -98,6 +100,7 @@ public final class SettingsStore {
             switch self {
             case .claudeSession, .claudeWeekly, .claudeFable, .sessionReset: "claude"
             case .codexSession, .codexWeekly: "codex"
+            case .cursorWeekly: "cursor"
             default: nil
             }
         }
@@ -139,12 +142,13 @@ public final class SettingsStore {
     // MARK: - Quick panel (menu bar drop-down)
 
     public enum PanelSection: String, CaseIterable, Sendable, Identifiable {
-        case claude, codex, today, models, tools, week, month
+        case claude, codex, cursor, today, models, tools, week, month
         public var id: String { rawValue }
         public var localizedName: String {
             switch self {
             case .claude: L("Claude limits")
             case .codex: L("Codex limits")
+            case .cursor: L("Cursor limits")
             case .today: L("Today: usage and trend")
             case .models: L("Today's models")
             case .tools: L("Today's tools")
@@ -154,7 +158,7 @@ public final class SettingsStore {
         }
         public var icon: String {
             switch self {
-            case .claude, .codex: "gauge.with.dots.needle.50percent"
+            case .claude, .codex, .cursor: "gauge.with.dots.needle.50percent"
             case .today: "chart.line.uptrend.xyaxis"
             case .models: "cpu"
             case .tools: "hammer"
@@ -566,7 +570,7 @@ public final class SettingsStore {
         menuBarAlertColor = bool("menuBarAlertColor", true)
         menuBarShowIcon = bool("menuBarShowIcon", true)
         menuBarShowPace = bool("menuBarShowPace", true)
-        panelSections = d.stringArray(forKey: "panelSections") ?? ["claude", "codex", "today", "models"]
+        panelSections = d.stringArray(forKey: "panelSections") ?? ["claude", "codex", "cursor", "today", "models"]
         panelWidth = int("panelWidth", 340)
         panelLimitStyle = string("panelLimitStyle", "rings")
         panelListCount = int("panelListCount", 4)

@@ -274,8 +274,11 @@ struct SettingsPage: View {
     }
 
     private func statusText(_ p: LimitProvider) -> String {
-        let snapshot = p == .claude ? state.limits.claude : state.limits.codex
-        guard let snapshot else { return L("Not read yet") }
+        let (snapshot, status) = state.limits.snapshot(p)
+        guard let snapshot else {
+            if case .notConfigured = status, p == .cursor { return L("Sign in to the Cursor desktop app on this Mac; Grok Bot and Cursor usage and their shared weekly limit are read from that account.") }
+            return L("Not read yet")
+        }
         return "\(snapshot.accountLabel) · \(LimitsCard.ago(snapshot.updatedAt))"
     }
 

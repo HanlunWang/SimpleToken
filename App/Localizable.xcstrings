@@ -1561,6 +1561,61 @@
         }
       }
     },
+    "Cursor limits": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cursor 额度"
+          }
+        }
+      }
+    },
+    "Cursor reported no usage window": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cursor 没有返回额度窗口"
+          }
+        }
+      }
+    },
+    "Cursor returned HTTP %lld": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cursor 返回 HTTP %lld"
+          }
+        }
+      }
+    },
+    "Cursor returned something other than JSON": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cursor 返回的不是 JSON"
+          }
+        }
+      }
+    },
+    "Cursor weekly limit": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cursor 本周额度"
+          }
+        }
+      }
+    },
     "Custom color": {
       "extractionState": "manual",
       "localizations": {
@@ -3093,6 +3148,17 @@
         }
       }
     },
+    "On-demand": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "按需用量"
+          }
+        }
+      }
+    },
     "Only the header row is shown": {
       "extractionState": "manual",
       "localizations": {
@@ -3265,17 +3331,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "周期"
-          }
-        }
-      }
-    },
-    "Plan": {
-      "extractionState": "manual",
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "套餐"
           }
         }
       }
@@ -3925,6 +3980,17 @@
           "stringUnit": {
             "state": "translated",
             "value": "在浏览器登录 claude.ai → 开发者工具 → Application → Cookies → sessionKey。只保存在本机。"
+          }
+        }
+      }
+    },
+    "Sign in to the Cursor desktop app on this Mac; Grok Bot and Cursor usage and their shared weekly limit are read from that account.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在这台 Mac 上登录 Cursor 桌面版即可：Grok Bot 与 Cursor 的用量和它们共用的本周额度都从该账号读取。"
           }
         }
       }
@@ -4864,6 +4930,17 @@
         }
       }
     },
+    "Windows": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "窗口数"
+          }
+        }
+      }
+    },
     "With nothing selected, only the icon is shown. ⌥-click the menu bar icon to open the other view; right-click to refresh or quit.": {
       "extractionState": "manual",
       "localizations": {
@@ -5014,6 +5091,39 @@
           "stringUnit": {
             "state": "translated",
             "value": "今日"
+          }
+        }
+      }
+    },
+    "tokscale could not sign in to Cursor": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "tokscale 无法登录 Cursor"
+          }
+        }
+      }
+    },
+    "tokscale cursor sync did not finish": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "tokscale 的 Cursor 同步没有完成"
+          }
+        }
+      }
+    },
+    "tokscale cursor sync failed": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "tokscale 的 Cursor 同步失败"
           }
         }
       }

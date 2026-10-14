@@ -40,14 +40,14 @@ Widgets include:
 | Widget | What it shows |
 | --- | --- |
 | Main chart | Cumulative usage for the selected range against the previous period (or the same period last year) |
-| Limits | Claude session, weekly and model windows, Codex windows, pace markers and a projection to the reset |
+| Limits | Claude session, weekly and model windows, Codex windows, the Cursor / Grok Bot weekly window, pace markers and a projection to the reset |
 | Models | Share by model with vendor colours and logos, daily trends and cost per million tokens |
 | Usage map | A treemap of your models, grouped by vendor and sized by usage |
 | Flow | A flow diagram from tools to the models they used |
 | Usage chart | Stacked bars by model or tool, or half-hour bars for a single day with day-by-day navigation |
 | Calendar | A heatmap of daily usage with streaks and your busiest day |
 | Time of day | A weekday × hour punchcard of when you work |
-| Tools | Usage per tool (Claude Code, Codex, Copilot, OpenCode, Gemini) |
+| Tools | Usage per tool (Claude Code, Codex, Grok Bot, Cursor, Copilot, OpenCode, Gemini) |
 | Token breakdown | Cache reads and writes, fresh input and output, and your cache hit rate |
 | This month's cost | Month-to-date cost at list prices, a month-end projection and last month for reference |
 | Stats | Eight single-number widgets: daily average, peak day, active days, cost per million tokens, total cost, messages, top model and busiest weekday |
@@ -94,14 +94,16 @@ SimpleToken never asks you to sign in to it. It reads what your coding tools alr
 | --- | --- |
 | Claude Code | Sign in once with `claude` (Claude subscription or API key). Sessions are logged to `~/.claude/projects`. |
 | Codex (CLI or app) | Sign in once with `codex login` or in the Codex / ChatGPT app. Sessions are logged under `~/.codex`. |
+| Grok Bot, Cursor | Sign in to the Cursor desktop app on this Mac. Their usage is not logged locally: SimpleToken syncs it from your Cursor account (through tokscale), once an hour. Grok Bot shows up as its own tool. |
 | GitHub Copilot CLI, OpenCode, Gemini CLI | Use them as usual; their local logs are read if present. |
 
-A model shows up as soon as a tool has logged a request with it, grouped by vendor (Anthropic, OpenAI, Google and others). Nothing appears for tools you haven't used on this Mac. Half-hour (1D) detail is available for Claude Code only.
+A model shows up as soon as a tool has logged a request with it, grouped by vendor (Anthropic, OpenAI, Google, xAI and others). Nothing appears for tools you haven't used on this Mac. Half-hour (1D) detail is available for Claude Code only.
 
 **2. Plan limits (optional).**
 
 - **Claude:** limits come from claude.ai. Sign in to claude.ai in your browser, open Developer Tools → Application → Cookies → `https://claude.ai`, copy the value of `sessionKey` (it starts with `sk-ant-`) and paste it into Settings → Limits & Alerts. It is stored only on this Mac, in a file only your user can read. If limits stop updating after you sign out of claude.ai, paste a fresh value. The plan name (for example Max 20x) is read from Claude Code's keychain item, so macOS may ask once whether SimpleToken can read "Claude Code-credentials".
 - **Codex:** nothing to paste. SimpleToken asks the local `codex app-server` (read-only, no approvals), which uses your existing Codex sign-in. It finds `codex` inside Codex.app or ChatGPT.app, in `~/.local/bin`, or in Homebrew.
+- **Cursor / Grok Bot (X Pass):** nothing to paste either. The weekly included-usage window that Grok Bot and Cursor share, and any on-demand spend limit, are read from your Cursor account with the Cursor desktop app's sign-in.
 
 ## Build from source
 
@@ -133,6 +135,8 @@ Run the unit tests with `cd SimpleTokenKit && swift test`. Releases are built, s
 | Claude plan limits | The claude.ai usage endpoint, with your `sessionKey` cookie |
 | Claude plan name | The subscription tier from Claude Code's keychain item (the token itself is not read) |
 | Codex plan limits | The local `codex app-server` (read-only, no approvals) |
+| Grok Bot and Cursor usage | Your Cursor account's usage API, synced into tokscale's cache with the Cursor desktop app's sign-in |
+| Cursor plan limits | Cursor's dashboard API (the weekly window and the on-demand spend), with the same sign-in |
 
 Everything else stays in `~/Library/Application Support/SimpleToken/`. Costs are estimates at public list prices; subscription plans are billed differently.
 

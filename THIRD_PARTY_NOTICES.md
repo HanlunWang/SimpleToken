@@ -2,7 +2,7 @@
 
 SimpleToken bundles the following third-party software.
 
-## tokscale 4.9.0
+## tokscale 4.18.0
 
 - Source: https://github.com/junhoyeo/tokscale (npm package `tokscale`)
 - Files: `Resources/tokscale/tokscale`, `Resources/tokscale/libFoundationModels.dylib`

@@ -11,6 +11,10 @@ public final class AppState {
     public let usage: UsageStore
     public let history: HistoryStore
     public let limits: LimitsStore
+    /// The last Cursor usage sync's error, nil when it went through (or never ran)
+    public var cursorSyncError: String?
+    @ObservationIgnored private var lastCursorSync: Date?
+    private var cursorSyncDue: Bool { lastCursorSync.map { Date().timeIntervalSince($0) > 3540 } ?? true }
     public let intraday: IntradayStore
     private let notifier: LimitNotifier
 
@@ -33,13 +37,22 @@ public final class AppState {
         guard let binary = TokscaleRunner.locateBinary() else {
             fatalError("tokscale binary not found — bundle Resources/tokscale missing")
         }
-        // Pure-JSONL tools are collected along the way (free when there is no data) and feed the tools card
-        let runner = TokscaleRunner(binary: binary, clients: "claude,codex,copilot,opencode,gemini")
+        // Pure-JSONL tools are collected along the way (free when there is no data) and feed the tools card;
+        // Cursor (which carries Grok Bot) comes from tokscale's synced cache of the Cursor account
+        let runner = TokscaleRunner(binary: binary, clients: "claude,codex,copilot,opencode,gemini,cursor,grok")
         usage = UsageStore(runner: runner)
         history = HistoryStore(runner: runner)
         limits = LimitsStore()
         intraday = IntradayStore()
         notifier = LimitNotifier(limits: limits)
+        // A sync fetches the account's whole usage history (tens of seconds, a few MB), so at most once an hour
+        let cursorSync = CursorSync(binary: binary)
+        usage.beforeFullScan = { [weak self] in
+            guard let self, await self.cursorSyncDue else { return }
+            await MainActor.run { self.lastCursorSync = Date() }
+            let error = await cursorSync.sync()
+            await MainActor.run { self.cursorSyncError = error }
+        }
     }
 
     public func start() {
@@ -49,7 +62,7 @@ public final class AppState {
             history.loadDemo(archive)
             usage.loadDemo(DemoData.snapshot(from: archive))
             let demoLimits = DemoData.limits()
-            limits.loadDemo(claude: demoLimits.claude, codex: demoLimits.codex)
+            limits.loadDemo(claude: demoLimits.claude, codex: demoLimits.codex, cursor: demoLimits.cursor)
             intraday.loadDemo(DemoData.intraday(from: archive))
         } else {
             usage.start()
@@ -80,6 +93,7 @@ public final class AppState {
     public func refreshAll() {
         guard !isRefreshing, !DemoData.isEnabled else { return }
         isRefreshing = true
+        lastCursorSync = nil    // a manual refresh syncs Cursor as well
         usage.requestFullTick()
         limits.refreshNow()
         Task {
@@ -88,7 +102,7 @@ public final class AppState {
             // Wait for the usage scan and limit probes to settle (up to 60 seconds)
             for _ in 0..<120 {
                 try? await Task.sleep(for: .milliseconds(500))
-                let probing = limits.claudeStatus == .probing || limits.codexStatus == .probing
+                let probing = limits.claudeStatus == .probing || limits.codexStatus == .probing || limits.cursorStatus == .probing
                 if !usage.isCollecting && !probing { break }
             }
             isRefreshing = false

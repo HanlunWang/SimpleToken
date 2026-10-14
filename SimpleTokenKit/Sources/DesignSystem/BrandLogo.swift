@@ -26,6 +26,7 @@ public enum BrandLogos {
         case "opencode": "opencode"
         case "gemini": "geminicli"
         case "cursor": "cursor"
+        case "grokbot", "grok": "grok"
         default: nil
         }
     }
@@ -35,6 +36,7 @@ public enum BrandLogos {
         switch id.lowercased() {
         case "claude": "claude"
         case "codex": "codex"
+        case "cursor": "cursor"
         default: nil
         }
     }

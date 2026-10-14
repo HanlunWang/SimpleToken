@@ -68,6 +68,7 @@ struct LimitsCard: View {
                 }
                 OptionRow(L("Show \(LimitProvider.claude.displayName)")) { MiniToggle(isOn: providerBinding("claude")) }
                 OptionRow(L("Show \(LimitProvider.codex.displayName)")) { MiniToggle(isOn: providerBinding("codex")) }
+                OptionRow(L("Show \(LimitProvider.cursor.displayName)")) { MiniToggle(isOn: providerBinding("cursor")) }
                 OptionRow(L("Per-model extra limits")) { MiniToggle(isOn: $settings.limitShowModelBuckets) }
                 OptionRow(L("Even-pace line")) { MiniToggle(isOn: $settings.limitShowPace) }
                 OptionRow(L("Data")) {
@@ -87,8 +88,11 @@ struct LimitsCard: View {
     private typealias Item = (provider: LimitProvider, snapshot: ProviderLimits?, status: LimitsStore.Status)
 
     private var shown: [Item] {
-        [(LimitProvider.claude, limits.claude, limits.claudeStatus), (.codex, limits.codex, limits.codexStatus)]
-            .filter { !settings.hiddenLimitProviders.contains($0.0.rawValue) }
+        LimitProvider.allCases.map { provider -> Item in
+            let (snapshot, status) = limits.snapshot(provider)
+            return (provider, snapshot, status)
+        }
+        .filter { !settings.hiddenLimitProviders.contains($0.provider.rawValue) }
     }
 
     /// A window to draw, or a provider with nothing to draw yet (not set up, unreachable, loading)
@@ -293,6 +297,7 @@ struct LimitsCard: View {
                         ForEach(rest) { row($0) }
                     }
                 }
+                planStrip
                 FactsRow(facts)
             }
         }
@@ -330,17 +335,31 @@ struct LimitsCard: View {
         }
     }
 
-    /// Plan, the next reset and how the main window compares with even use
+    /// Every provider's plan beside its logo (the 2×2 card: three plans do not fit one facts column)
+    private var planStrip: some View {
+        FlowLayout(spacing: 12, lineSpacing: 4) {
+            ForEach(shown.filter { !($0.snapshot?.accountLabel ?? "").isEmpty }, id: \.provider) { item in
+                HStack(spacing: 5) {
+                    BrandBadge(logo: BrandLogos.provider(item.provider.rawValue), color: accent(item.provider), size: 14)
+                    Text(item.snapshot?.accountLabel ?? "").font(.system(size: Typo.small, design: .monospaced))
+                        .foregroundStyle(.secondary).lineLimit(1)
+                }
+            }
+        }
+    }
+
+    /// The next reset and how the main window compares with even use (plans have their own strip)
     private var facts: [(String, String)] {
         let windows = windows(models: false)
         let now = Date()
-        var out: [(String, String)] = [(L("Plan"), planText.isEmpty ? "—" : planText)]
+        var out: [(String, String)] = []
         let next = windows.compactMap(\.window.resetsAt).filter { $0 > now }.min()
         out.append((L("Next reset"), next.map(Self.resetFormatter) ?? "—"))
         if let main = windows.first?.window, let elapsed = main.elapsedFraction(now: now) {
             let points = Int(((main.usedPercent / 100 - elapsed) * 100).rounded())
             out.append((L("Even pace"), points > 0 ? L("\(points)% ahead") : points < 0 ? L("\(-points)% behind") : L("On pace")))
         }
+        out.append((L("Windows"), String(windows.count)))
         return out
     }
 

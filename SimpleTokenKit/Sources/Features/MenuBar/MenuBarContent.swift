@@ -31,17 +31,17 @@ enum MenuBarContent {
     static func segments(state: AppState, now: Date = Date()) -> [MenuBarSegment] {
         let settings = SettingsStore.shared
         let items = settings.menuBarEntries
-        // When limits from both providers are shown, labels include the provider name
+        // When limits from more than one provider are shown, labels include the provider name
         let bothProviders = Set(items.compactMap(\.provider)).count > 1
         let threshold = settings.alertThresholds.max() ?? 80
         return items.map { item in
             var label = item.shortLabel
             if bothProviders, let provider = item.provider {
-                label = (provider == "codex" ? "Codex " : "Claude ") + label
+                label = (LimitProvider(rawValue: provider)?.displayName ?? provider) + " " + label
             }
             switch item {
-            case .claudeSession, .claudeWeekly, .claudeFable, .codexSession, .codexWeekly:
-                let snapshot = item.provider == "codex" ? state.limits.codex : state.limits.claude
+            case .claudeSession, .claudeWeekly, .claudeFable, .codexSession, .codexWeekly, .cursorWeekly:
+                let snapshot = item.provider.flatMap(LimitProvider.init(rawValue:)).map { state.limits.snapshot($0).limits } ?? nil
                 let window: LimitWindow? = switch item {
                 case .claudeSession, .codexSession: snapshot?.window(.session) ?? snapshot?.primaryWindow
                 case .claudeFable: snapshot?.window(.fable)

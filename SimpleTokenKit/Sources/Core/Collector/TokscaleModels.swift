@@ -54,7 +54,7 @@ public struct TokscaleReport: Decodable, Sendable {
             p.outputTokens += e.output ?? 0
             p.cacheReadTokens += e.cacheRead ?? 0
             p.cacheWriteTokens += e.cacheWrite ?? 0
-            let client = Self.normalizeClient(e.client)
+            let client = Self.normalizeClient(e.client, model: e.model)
             let slice = UsagePeriod.Slice(tokens: tokens, costUsd: cost, messages: e.messageCount ?? 0,
                                           input: e.input ?? 0, output: e.output ?? 0,
                                           cacheRead: e.cacheRead ?? 0, cacheWrite: e.cacheWrite ?? 0)
@@ -68,11 +68,14 @@ public struct TokscaleReport: Decodable, Sendable {
         return p
     }
 
-    /// Client name folding (port of normalizeClientName's claude branch: anything containing "claude" is claude)
-    public static func normalizeClient(_ raw: String?) -> String {
+    /// Client name folding (port of normalizeClientName's claude branch: anything containing "claude" is claude).
+    /// Grok Bot is a Cursor app billed through the Cursor account, so tokscale reports it as `cursor`; its models
+    /// (`grok-bot-*`) tell it apart and it becomes its own tool, `grokbot`.
+    public static func normalizeClient(_ raw: String?, model: String? = nil) -> String {
         let name = (raw ?? "").lowercased()
         if name.isEmpty { return "unknown" }
         if name.contains("claude") { return "claude" }
+        if name == "cursor", (model ?? "").lowercased().hasPrefix("grok-bot") { return "grokbot" }
         return name
     }
 

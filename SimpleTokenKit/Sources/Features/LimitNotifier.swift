@@ -31,7 +31,7 @@ public final class LimitNotifier {
     private func check() {
         let settings = SettingsStore.shared
         let thresholds = settings.alertThresholds.sorted()
-        let snapshots = [limits.claude, limits.codex]      // read first so observation is registered even while alerts are off
+        let snapshots = [limits.claude, limits.codex, limits.cursor]   // read first so observation is registered even while alerts are off
         guard settings.limitNotifications, !thresholds.isEmpty else { return }
         var notified = Set(defaults.stringArray(forKey: Self.key) ?? [])
         var changed = false

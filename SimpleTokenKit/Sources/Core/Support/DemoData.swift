@@ -93,7 +93,7 @@ public enum DemoData {
                              allTime: period { _ in true }, collectedAt: today, dayKey: todayKey)
     }
 
-    public static func limits(now: Date = Date()) -> (claude: ProviderLimits, codex: ProviderLimits) {
+    public static func limits(now: Date = Date()) -> (claude: ProviderLimits, codex: ProviderLimits, cursor: ProviderLimits) {
         let claude = ProviderLimits(provider: .claude, windows: [
             LimitWindow(kind: .session, usedPercent: 38, resetsAt: now.addingTimeInterval(2.4 * 3600), windowMinutes: 300),
             LimitWindow(kind: .weekly, usedPercent: 57, resetsAt: now.addingTimeInterval(2.6 * 86400)),
@@ -103,7 +103,10 @@ public enum DemoData {
             LimitWindow(kind: .session, usedPercent: 12, resetsAt: now.addingTimeInterval(3.1 * 3600), windowMinutes: 300),
             LimitWindow(kind: .weekly, usedPercent: 26, resetsAt: now.addingTimeInterval(4.2 * 86400)),
         ], accountLabel: "Pro", updatedAt: now.addingTimeInterval(-40))
-        return (claude, codex)
+        let cursor = ProviderLimits(provider: .cursor, windows: [
+            LimitWindow(kind: .weekly, usedPercent: 44, resetsAt: now.addingTimeInterval(3.3 * 86400)),
+        ], accountLabel: "X Pass Premium", updatedAt: now.addingTimeInterval(-40))
+        return (claude, codex, cursor)
     }
 
     /// Half-hour buckets for the Claude models over the last 90 days (weekday office hours plus some evenings).

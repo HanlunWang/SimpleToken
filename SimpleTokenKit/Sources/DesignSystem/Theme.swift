@@ -15,6 +15,9 @@ public enum Palette {
     public static let other = Color(white: 0.29)                                             // "Other"
 
     /// Model colour slots (assigned in order; stacks follow the same order)
+    /// xAI (Grok) violet: dataviz-validated against terracotta, teal and indigo
+    public static let xai = Color(red: 0x8F / 255, green: 0x7E / 255, blue: 0xE6 / 255)        // #8f7ee6
+
     public static let slots: [Color] = [claude, indigo, teal]
 
     /// Monochrome ramp from light to dark (composition, calendar, etc.)

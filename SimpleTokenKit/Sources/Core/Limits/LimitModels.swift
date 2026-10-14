@@ -2,18 +2,20 @@ import Foundation
 
 /// Limit provider. The UI picks colour and mark by it; they never follow the ranking.
 public enum LimitProvider: String, Codable, Sendable, CaseIterable {
-    case claude, codex
+    case claude, codex, cursor
 
     public var displayName: String {
         switch self {
         case .claude: "Claude"
         case .codex: "Codex"
+        case .cursor: "Cursor"
         }
     }
 }
 
 /// Limit window (normalised). Claude: 5h session / weekly / Fable; Codex: weekly (and possibly session),
-/// plus per-model extra limits (kind = .model, title = model name).
+/// plus per-model extra limits (kind = .model, title = model name); Cursor: the weekly included usage
+/// (Grok Bot and Cursor share it) and, as a titled extra, the on-demand spend against its limit.
 public struct LimitWindow: Codable, Equatable, Sendable, Identifiable {
     public enum Kind: String, Codable, Sendable, CaseIterable {
         case session, weekly, fable, model

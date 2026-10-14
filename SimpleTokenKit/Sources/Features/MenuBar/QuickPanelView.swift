@@ -69,6 +69,7 @@ public struct QuickPanelView: View {
                     switch section {
                     case .claude: PanelLimits(provider: .claude, snapshot: state.limits.claude, status: state.limits.claudeStatus, colors: colors)
                     case .codex: PanelLimits(provider: .codex, snapshot: state.limits.codex, status: state.limits.codexStatus, colors: colors)
+                    case .cursor: PanelLimits(provider: .cursor, snapshot: state.limits.cursor, status: state.limits.cursorStatus, colors: colors)
                     case .today: PanelToday(state: state)
                     case .models: PanelModels(period: state.period(\.today), colors: colors)
                     case .tools: PanelTools(period: state.period(\.today), colors: colors)
