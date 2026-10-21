@@ -33,6 +33,11 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Install Go
+        # The runner image has no Go; Homebrew's is enough to bootstrap, and GOTOOLCHAIN=auto then fetches the
+        # version go.mod asks for (checked against the Go checksum database).
+        run: brew install go
+
       - name: Check the version
         id: version
         env:

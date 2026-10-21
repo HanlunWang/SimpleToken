@@ -41,3 +41,38 @@ func TestImportDefaultsKeepsKnownKeys(t *testing.T) {
 	}
 	_ = os.Getenv
 }
+
+func TestDecodePlistSkipsDataAndDates(t *testing.T) {
+	// 0.1.x keeps a binary dashboardLayout, which JSON cannot hold; it must not cost the other keys.
+	xml := `<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>dashboardLayout</key><data>AAEC</data>
+	<key>lastRun</key><date>2026-10-21T00:00:00Z</date>
+	<key>dashboardRange</key><string>3M</string>
+	<key>panelWidth</key><integer>420</integer>
+	<key>alertThresholds</key><array><real>60</real><integer>90</integer><data>AA==</data></array>
+	<key>statsExactNumber</key><true/>
+	<key>limitShowUsed</key><false/>
+	<key>widgetSizes</key><dict><key>models</key><string>large</string><key>cost</key><string>M</string></dict>
+	<key>cardAccents</key><dict><key>card.hero</key><string>blue</string></dict>
+</dict>
+</plist>`
+	m, err := decodePlist([]byte(xml))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := m["dashboardLayout"]; ok {
+		t.Fatal("data values must be dropped")
+	}
+	s := Default()
+	s.importDefaults(m)
+	s.normalize()
+	if s.Range != "3M" || s.PanelWidth != 420 || !s.ExactNumbers || s.LimitShowUsed || s.CardSizes["models"] != "L" || s.CardSizes["cost"] != "M" || s.CardAccents["hero"] != "blue" {
+		t.Fatalf("import: %+v", s)
+	}
+	if !slices.Equal(s.AlertThresholds, []float64{60, 90}) {
+		t.Fatalf("thresholds %v", s.AlertThresholds)
+	}
+}

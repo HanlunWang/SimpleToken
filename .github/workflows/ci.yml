@@ -29,6 +29,11 @@ jobs:
         working-directory: SimpleTokenKit
         run: swift test
 
+      - name: Install Go
+        # The runner image has no Go; Homebrew's is enough to bootstrap, and GOTOOLCHAIN=auto then fetches the
+        # version go.mod asks for (checked against the Go checksum database).
+        run: brew install go
+
       - name: Tests (Go app)
         env:
           GOTOOLCHAIN: auto   # the runner's Go fetches the version go.mod asks for

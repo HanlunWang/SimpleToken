@@ -3,10 +3,14 @@
 package settings
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"encoding/xml"
 	"os"
 	"slices"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/HanlunWang/SimpleToken/internal/atomicfile"
@@ -200,6 +204,18 @@ func (s *Settings) normalize() {
 	if len(s.AlertThresholds) == 0 {
 		s.AlertThresholds = d.AlertThresholds
 	}
+	// 0.1.x spelled sizes out and keyed accents "card.<id>".
+	for id, v := range s.CardSizes {
+		if n, ok := map[string]string{"small": "S", "medium": "M", "large": "L", "wide": "W"}[v]; ok {
+			s.CardSizes[id] = n
+		}
+	}
+	for k, v := range s.CardAccents {
+		if id, ok := strings.CutPrefix(k, "card."); ok {
+			delete(s.CardAccents, k)
+			s.CardAccents[id] = v
+		}
+	}
 }
 
 // TopThreshold is the highest alert threshold (the menu bar turns red from it), 100 when none is set.
@@ -217,20 +233,98 @@ func (s Settings) TopThreshold() float64 {
 // BundleID is the app's identifier, the same as the Swift releases so data, login item and Keychain carry over.
 const BundleID = "dev.hanlun.simpletoken"
 
-// readUserDefaults exports a defaults domain as JSON (defaults → plist → plutil → JSON). Values JSON cannot hold
-// (dates, data) make plutil fail; then nothing is imported and the defaults stand.
+// readUserDefaults exports a defaults domain as an XML property list (defaults → plist → plutil) and decodes it.
+// Values JSON cannot hold (dates, data, such as 0.1.x's dashboardLayout) are dropped, not fatal.
 func readUserDefaults(domain string) (map[string]any, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	out, err := proc.Run(ctx, "/bin/sh", []string{"-c", "/usr/bin/defaults export " + domain + " - | /usr/bin/plutil -convert json -o - -"}, 5*time.Second)
+	out, err := proc.Run(ctx, "/bin/sh", []string{"-c", "/usr/bin/defaults export " + domain + " - | /usr/bin/plutil -convert xml1 -o - -"}, 5*time.Second)
 	if err != nil {
 		return nil, err
 	}
-	var m map[string]any
-	if err := json.Unmarshal(out.Stdout, &m); err != nil {
+	return decodePlist(out.Stdout)
+}
+
+// decodePlist reads the top-level dictionary of an XML property list. Strings, numbers, booleans, arrays and
+// dictionaries come through; dates and data are skipped.
+func decodePlist(data []byte) (map[string]any, error) {
+	d := xml.NewDecoder(bytes.NewReader(data))
+	for {
+		tok, err := d.Token()
+		if err != nil {
+			return nil, err
+		}
+		if se, ok := tok.(xml.StartElement); ok && se.Name.Local == "dict" {
+			v, err := plistValue(d, se)
+			if err != nil {
+				return nil, err
+			}
+			return v.(map[string]any), nil
+		}
+	}
+}
+
+func plistValue(d *xml.Decoder, se xml.StartElement) (any, error) {
+	switch se.Name.Local {
+	case "dict", "array":
+		m, a := map[string]any{}, []any{}
+		key := ""
+		for {
+			tok, err := d.Token()
+			if err != nil {
+				return nil, err
+			}
+			switch t := tok.(type) {
+			case xml.StartElement:
+				if t.Name.Local == "key" {
+					if err := d.DecodeElement(&key, &t); err != nil {
+						return nil, err
+					}
+					continue
+				}
+				v, err := plistValue(d, t)
+				if err != nil {
+					return nil, err
+				}
+				if v == nil {
+					continue
+				}
+				if se.Name.Local == "dict" {
+					m[key] = v
+				} else {
+					a = append(a, v)
+				}
+			case xml.EndElement:
+				if se.Name.Local == "dict" {
+					return m, nil
+				}
+				return a, nil
+			}
+		}
+	case "true", "false":
+		return se.Name.Local == "true", d.Skip()
+	}
+	var text string
+	if err := d.DecodeElement(&text, &se); err != nil {
 		return nil, err
 	}
-	return m, nil
+	switch se.Name.Local {
+	case "string":
+		return text, nil
+	case "integer":
+		n, err := strconv.ParseInt(strings.TrimSpace(text), 10, 64)
+		if err != nil {
+			return nil, nil
+		}
+		return n, nil
+	case "real":
+		f, err := strconv.ParseFloat(strings.TrimSpace(text), 64)
+		if err != nil {
+			return nil, nil
+		}
+		return f, nil
+	}
+	return nil, nil // date, data
 }
 
 // importDefaults copies the keys the Swift app wrote. Unknown and malformed values are skipped.
