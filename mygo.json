@@ -1,0 +1,16 @@
+{
+  "name": "SimpleToken",
+  "identifier": "dev.hanlun.simpletoken",
+  "version": "0.2.0",
+  "copyright": "\u00a9 2026 Hanlun Wang",
+  "icon": "designs/logo/app-icon-1024.png",
+  "main": "./cmd/simpletoken",
+  "out": "build/mygo",
+  "macos": {
+    "minimumSystemVersion": "14.0",
+    "infoPlist": {
+      "LSUIElement": true,
+      "LSApplicationCategoryType": "public.app-category.developer-tools"
+    }
+  }
+}

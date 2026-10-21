@@ -12,6 +12,20 @@ xcodebuild -project SimpleToken.xcodeproj -scheme SimpleToken -derivedDataPath b
 
 Releases: a `vX.Y.Z` tag runs `.github/workflows/release.yml` ([docs/RELEASING.md](docs/RELEASING.md)). Signing: `Config/Signing.xcconfig` signs ad-hoc; put your identity and team in the git-ignored `Config/Signing.local.xcconfig`. Bundle id `dev.hanlun.simpletoken` (`AppPaths.migrateFromLumenIfNeeded()` imports the pre-rename `dev.hanlun.lumen` data; keep it). Measure resource use on a **Release** build. `SIMPLETOKEN_TOKSCALE_PATH` overrides the bundled tokscale (release builds need it outside the app bundle).
 
+## v2 rewrite (Go + mygo, branch `v2`)
+
+The Swift app is being replaced by a Go app on [mygo](https://github.com/egoist/mygo) native UI; both live in the repo until v2 ships. Design reference: the local prototype `designs/simpletoken-v2/` (git-ignored).
+
+```bash
+go test ./internal/... && go vet ./...         # core (UI-free) + everything
+SIMPLETOKEN_SHOTS=/tmp/shots go test ./gui/    # headless renders of window / panel / settings / menu bar (demo data)
+go tool mygo build -skip-dmg -sign -           # ad-hoc build/mygo/darwin-arm64/SimpleToken.app
+```
+
+- `internal/` knows nothing of mygo; `gui/` is the only package that imports it (named `gui`, not `app`: `App/` would collide on a case-insensitive disk). `cmd/simpletoken` is the entry.
+- On-disk formats stay those of the Swift app (same data dir and bundle id); settings move from UserDefaults to `settings.json`, imported once. Never run a dev build against the live data dir while 0.1.x runs: point `SIMPLETOKEN_DATA_DIR` at a copy.
+- Limit probes go through `darwin.URLSessionTransport` (claude.ai's Cloudflare challenges Go's TLS). Views never block on mygo app calls (they hang headless tests); read them once and cache.
+
 ## Layout
 
 `SimpleTokenKit` SwiftPM package: `Core` (collection, analytics, limits, persistence — no UI), `DesignSystem` (palette, glass components), `Features` (views, windows, menu bar). `App/` is the thin xcodegen shell. Data lives in `~/Library/Application Support/SimpleToken/`. `designs/logo/` holds the icon sources; `docs/images/` the README screenshots (demo data only).

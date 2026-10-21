@@ -1,0 +1,5 @@
+{"entries":[
+  {"client":"claude","model":"claude-opus-5-5","input":10,"output":5,"cacheRead":100,"cacheWrite":20,"messageCount":2,"cost":1.5},
+  {"client":"claude","model":"claude-fable-5","input":4,"output":1,"cacheRead":0,"cacheWrite":0,"messageCount":1,"cost":0.5},
+  {"client":"codex","model":"gpt-5.3-codex","input":50,"output":10,"cacheRead":40,"cacheWrite":0,"messageCount":3,"cost":2}
+]}

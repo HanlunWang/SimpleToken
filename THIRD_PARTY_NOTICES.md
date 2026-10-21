@@ -36,8 +36,18 @@ SOFTWARE.
 ## AI Logo (brand logo collection)
 
 - Source: https://github.com/yldm-tech/ai-logo (a fork of LobeHub's lobe-icons)
-- Files: `SimpleTokenKit/Sources/DesignSystem/Resources/logos/*.svg` (monochrome variants; path data normalised, otherwise unmodified)
+- Files: `SimpleTokenKit/Sources/DesignSystem/Resources/logos/*.svg` and their copies in `gui/logos/` (monochrome variants; path data normalised, otherwise unmodified)
 - License: MIT, Copyright (c) 2023 LobeHub
 
 The brand logos are trademarks of their respective owners. They are included for identification only; inclusion does not imply any affiliation or endorsement.
 
+
+## Components of the v2 app (Go)
+
+- **Geist, Geist Mono, Geist Pixel** fonts (Vercel, in collaboration with basement.studio), `gui/fonts/*.ttf`: SIL Open Font License 1.1, full text in `gui/fonts/OFL.txt`. The pixel face is subset to basic Latin.
+- **Lucide** icons 0.469.0 (lucide-static), `gui/icons/lucide.json.gz`: ISC License, full text in `gui/icons/LUCIDE_LICENSE`.
+- **mygo** (github.com/egoist/mygo): MIT License, Copyright (c) 2026 MyGo contributors.
+- **purego** (github.com/ebitengine/purego): Apache License 2.0.
+- **golang.org/x/image**, **golang.org/x/text**: BSD 3-Clause, Copyright The Go Authors.
+
+These are compiled into the app binary; their license texts ship with their Go modules.

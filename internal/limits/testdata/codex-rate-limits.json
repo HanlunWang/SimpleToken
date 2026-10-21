@@ -1,0 +1,8 @@
+{"rateLimits":{"primary":{"usedPercent":12,"windowDurationMins":300,"resetsAt":1792454406},
+               "secondary":{"usedPercent":48.5,"windowDurationMins":10080,"resetsAt":1792800000},
+               "planType":"plus"},
+ "rateLimitsByLimitId":{
+   "codex":{"primary":{"usedPercent":12,"windowDurationMins":300}},
+   "codex_bengalfox":{"limitName":"GPT-5.3-Codex-Spark",
+                      "primary":{"usedPercent":3,"windowDurationMins":300,"resetsAt":1792454406},
+                      "secondary":{"used_percent":7,"window_duration_mins":10080}}}}

@@ -1,0 +1,701 @@
+{
+ "meta": {
+  "generatedAt": "2026-08-21T16:27:06.657714+00:00",
+  "version": "4.9.0",
+  "dateRange": {
+   "start": "2026-06-06",
+   "end": "2026-08-21"
+  }
+ },
+ "summary": {
+  "totalTokens": 1020780182,
+  "totalCost": 1220.724274,
+  "totalDays": 16,
+  "activeDays": 16,
+  "averagePerDay": 30.518107,
+  "maxCostInSingleDay": 122.026556,
+  "clients": [
+   "claude"
+  ],
+  "models": [
+   "<synthetic>",
+   "claude-fable-5",
+   "claude-opus-4-8",
+   "claude-opus-5"
+  ]
+ },
+ "contributions": [
+  {
+   "date": "2026-08-04",
+   "totals": {
+    "tokens": 38690702,
+    "cost": 41.697699,
+    "messages": 166
+   },
+   "intensity": 1,
+   "tokenBreakdown": {
+    "input": 65773,
+    "output": 156554,
+    "cacheRead": 37423288,
+    "cacheWrite": 1045088,
+    "reasoning": 0
+   },
+   "clients": [
+    {
+     "client": "claude",
+     "modelId": "claude-fable-5",
+     "providerId": "anthropic",
+     "tokens": {
+      "input": 16168,
+      "output": 94924,
+      "cacheRead": 17583849,
+      "cacheWrite": 154507,
+      "reasoning": 0
+     },
+     "cost": 24.423091,
+     "messages": 83
+    },
+    {
+     "client": "claude",
+     "modelId": "claude-opus-5",
+     "providerId": "anthropic",
+     "tokens": {
+      "input": 49605,
+      "output": 61630,
+      "cacheRead": 19839439,
+      "cacheWrite": 890580,
+      "reasoning": 0
+     },
+     "cost": 17.274608,
+     "messages": 84
+    }
+   ],
+   "activeTimeMs": 3607030
+  },
+  {
+   "date": "2026-08-05",
+   "totals": {
+    "tokens": 66362549,
+    "cost": 57.930152,
+    "messages": 200
+   },
+   "intensity": 1,
+   "tokenBreakdown": {
+    "input": 141942,
+    "output": 182350,
+    "cacheRead": 64080465,
+    "cacheWrite": 1957793,
+    "reasoning": 0
+   },
+   "clients": [
+    {
+     "client": "claude",
+     "modelId": "claude-fable-5",
+     "providerId": "anthropic",
+     "tokens": {
+      "input": 3034,
+      "output": 28122,
+      "cacheRead": 6731631,
+      "cacheWrite": 688198,
+      "reasoning": 0
+     },
+     "cost": 16.770533,
+     "messages": 17
+    },
+    {
+     "client": "claude",
+     "modelId": "claude-opus-4-8",
+     "providerId": "anthropic",
+     "tokens": {
+      "input": 424,
+      "output": 3323,
+      "cacheRead": 1685287,
+      "cacheWrite": 273288,
+      "reasoning": 0
+     },
+     "cost": 2.635876,
+     "messages": 5
+    },
+    {
+     "client": "claude",
+     "modelId": "claude-opus-5",
+     "providerId": "anthropic",
+     "tokens": {
+      "input": 138484,
+      "output": 150905,
+      "cacheRead": 55663547,
+      "cacheWrite": 996308,
+      "reasoning": 0
+     },
+     "cost": 38.523743,
+     "messages": 178
+    }
+   ],
+   "activeTimeMs": 3342473
+  },
+  {
+   "date": "2026-08-06",
+   "totals": {
+    "tokens": 47072740,
+    "cost": 37.269315,
+    "messages": 204
+   },
+   "intensity": 1,
+   "tokenBreakdown": {
+    "input": 143684,
+    "output": 221915,
+    "cacheRead": 45376800,
+    "cacheWrite": 1330341,
+    "reasoning": 0
+   },
+   "clients": [
+    {
+     "client": "claude",
+     "modelId": "claude-opus-5",
+     "providerId": "anthropic",
+     "tokens": {
+      "input": 143684,
+      "output": 221915,
+      "cacheRead": 45376800,
+      "cacheWrite": 1330341,
+      "reasoning": 0
+     },
+     "cost": 37.269315,
+     "messages": 204
+    }
+   ],
+   "activeTimeMs": 4276705
+  },
+  {
+   "date": "2026-08-07",
+   "totals": {
+    "tokens": 58738637,
+    "cost": 60.549126,
+    "messages": 142
+   },
+   "intensity": 1,
+   "tokenBreakdown": {
+    "input": 55489,
+    "output": 133774,
+    "cacheRead": 56447360,
+    "cacheWrite": 2102014,
+    "reasoning": 0
+   },
+   "clients": [
+    {
+     "client": "claude",
+     "modelId": "claude-fable-5",
+     "providerId": "anthropic",
+     "tokens": {
+      "input": 11052,
+      "output": 44164,
+      "cacheRead": 19769307,
+      "cacheWrite": 723527,
+      "reasoning": 0
+     },
+     "cost": 31.132124,
+     "messages": 39
+    },
+    {
+     "client": "claude",
+     "modelId": "claude-opus-5",
+     "providerId": "anthropic",
+     "tokens": {
+      "input": 44437,
+      "output": 89610,
+      "cacheRead": 36678053,
+      "cacheWrite": 1378488,
+      "reasoning": 0
+     },
+     "cost": 29.417001,
+     "messages": 103
+    }
+   ],
+   "activeTimeMs": 4185717
+  },
+  {
+   "date": "2026-08-10",
+   "totals": {
+    "tokens": 29898221,
+    "cost": 30.943427,
+    "messages": 187
+   },
+   "intensity": 1,
+   "tokenBreakdown": {
+    "input": 188862,
+    "output": 181878,
+    "cacheRead": 28221496,
+    "cacheWrite": 1305984,
+    "reasoning": 0
+   },
+   "clients": [
+    {
+     "client": "claude",
+     "modelId": "claude-opus-5",
+     "providerId": "anthropic",
+     "tokens": {
+      "input": 177858,
+      "output": 155907,
+      "cacheRead": 25872684,
+      "cacheWrite": 1097939,
+      "reasoning": 0
+     },
+     "cost": 24.585413,
+     "messages": 171
+    },
+    {
+     "client": "claude",
+     "modelId": "claude-fable-5",
+     "providerId": "anthropic",
+     "tokens": {
+      "input": 11004,
+      "output": 25972,
+      "cacheRead": 2348812,
+      "cacheWrite": 208045,
+      "reasoning": 0
+     },
+     "cost": 6.358013,
+     "messages": 16
+    }
+   ],
+   "activeTimeMs": 2534822
+  },
+  {
+   "date": "2026-08-11",
+   "totals": {
+    "tokens": 21303904,
+    "cost": 25.262229,
+    "messages": 58
+   },
+   "intensity": 0,
+   "tokenBreakdown": {
+    "input": 13322,
+    "output": 41646,
+    "cacheRead": 21092608,
+    "cacheWrite": 156328,
+    "reasoning": 0
+   },
+   "clients": [
+    {
+     "client": "claude",
+     "modelId": "claude-fable-5",
+     "providerId": "anthropic",
+     "tokens": {
+      "input": 13322,
+      "output": 41646,
+      "cacheRead": 21092608,
+      "cacheWrite": 156328,
+      "reasoning": 0
+     },
+     "cost": 25.262229,
+     "messages": 58
+    }
+   ],
+   "activeTimeMs": 1609548
+  },
+  {
+   "date": "2026-08-12",
+   "totals": {
+    "tokens": 4553913,
+    "cost": 6.622859,
+    "messages": 19
+   },
+   "intensity": 0,
+   "tokenBreakdown": {
+    "input": 5968,
+    "output": 11957,
+    "cacheRead": 4159335,
+    "cacheWrite": 376654,
+    "reasoning": 0
+   },
+   "clients": [
+    {
+     "client": "claude",
+     "modelId": "claude-opus-5",
+     "providerId": "anthropic",
+     "tokens": {
+      "input": 5020,
+      "output": 9922,
+      "cacheRead": 2687686,
+      "cacheWrite": 205626,
+      "reasoning": 0
+     },
+     "cost": 2.902166,
+     "messages": 15
+    },
+    {
+     "client": "claude",
+     "modelId": "claude-fable-5",
+     "providerId": "anthropic",
+     "tokens": {
+      "input": 948,
+      "output": 2034,
+      "cacheRead": 1471649,
+      "cacheWrite": 171028,
+      "reasoning": 0
+     },
+     "cost": 3.720693,
+     "messages": 4
+    }
+   ],
+   "activeTimeMs": 400259
+  },
+  {
+   "date": "2026-08-13",
+   "totals": {
+    "tokens": 19335985,
+    "cost": 27.108412,
+    "messages": 50
+   },
+   "intensity": 0,
+   "tokenBreakdown": {
+    "input": 6726,
+    "output": 63197,
+    "cacheRead": 17781636,
+    "cacheWrite": 1484427,
+    "reasoning": 0
+   },
+   "clients": [
+    {
+     "client": "claude",
+     "modelId": "claude-fable-5",
+     "providerId": "anthropic",
+     "tokens": {
+      "input": 2084,
+      "output": 32043,
+      "cacheRead": 7309097,
+      "cacheWrite": 457652,
+      "reasoning": 0
+     },
+     "cost": 14.652747,
+     "messages": 21
+    },
+    {
+     "client": "claude",
+     "modelId": "claude-opus-5",
+     "providerId": "anthropic",
+     "tokens": {
+      "input": 4642,
+      "output": 31154,
+      "cacheRead": 10472539,
+      "cacheWrite": 1026774,
+      "reasoning": 0
+     },
+     "cost": 12.455664,
+     "messages": 29
+    },
+    {
+     "client": "claude",
+     "modelId": "<synthetic>",
+     "providerId": "unknown",
+     "tokens": {
+      "input": 0,
+      "output": 0,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "reasoning": 0
+     },
+     "cost": 0.0,
+     "messages": 0
+    }
+   ],
+   "activeTimeMs": 2172099
+  },
+  {
+   "date": "2026-08-14",
+   "totals": {
+    "tokens": 85972168,
+    "cost": 98.058684,
+    "messages": 157
+   },
+   "intensity": 2,
+   "tokenBreakdown": {
+    "input": 63283,
+    "output": 177204,
+    "cacheRead": 84417802,
+    "cacheWrite": 1313877,
+    "reasoning": 0
+   },
+   "clients": [
+    {
+     "client": "claude",
+     "modelId": "claude-opus-5",
+     "providerId": "anthropic",
+     "tokens": {
+      "input": 6138,
+      "output": 45843,
+      "cacheRead": 16186034,
+      "cacheWrite": 480940,
+      "reasoning": 0
+     },
+     "cost": 12.275644,
+     "messages": 37
+    },
+    {
+     "client": "claude",
+     "modelId": "<synthetic>",
+     "providerId": "unknown",
+     "tokens": {
+      "input": 0,
+      "output": 0,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "reasoning": 0
+     },
+     "cost": 0.0,
+     "messages": 1
+    },
+    {
+     "client": "claude",
+     "modelId": "claude-fable-5",
+     "providerId": "anthropic",
+     "tokens": {
+      "input": 57145,
+      "output": 131362,
+      "cacheRead": 68231769,
+      "cacheWrite": 832938,
+      "reasoning": 0
+     },
+     "cost": 85.783039,
+     "messages": 119
+    }
+   ],
+   "activeTimeMs": 16892019
+  },
+  {
+   "date": "2026-08-17",
+   "totals": {
+    "tokens": 88436539,
+    "cost": 122.026556,
+    "messages": 239
+   },
+   "intensity": 2,
+   "tokenBreakdown": {
+    "input": 67878,
+    "output": 320430,
+    "cacheRead": 86399952,
+    "cacheWrite": 1648279,
+    "reasoning": 0
+   },
+   "clients": [
+    {
+     "client": "claude",
+     "modelId": "claude-fable-5",
+     "providerId": "anthropic",
+     "tokens": {
+      "input": 67771,
+      "output": 318210,
+      "cacheRead": 86111970,
+      "cacheWrite": 1411935,
+      "reasoning": 0
+     },
+     "cost": 120.349388,
+     "messages": 237
+    },
+    {
+     "client": "claude",
+     "modelId": "claude-opus-4-8",
+     "providerId": "anthropic",
+     "tokens": {
+      "input": 107,
+      "output": 2220,
+      "cacheRead": 287982,
+      "cacheWrite": 236344,
+      "reasoning": 0
+     },
+     "cost": 1.677168,
+     "messages": 1
+    },
+    {
+     "client": "claude",
+     "modelId": "<synthetic>",
+     "providerId": "unknown",
+     "tokens": {
+      "input": 0,
+      "output": 0,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "reasoning": 0
+     },
+     "cost": 0.0,
+     "messages": 1
+    }
+   ],
+   "activeTimeMs": 51397163
+  },
+  {
+   "date": "2026-08-18",
+   "totals": {
+    "tokens": 79316342,
+    "cost": 111.856413,
+    "messages": 219
+   },
+   "intensity": 2,
+   "tokenBreakdown": {
+    "input": 52125,
+    "output": 250857,
+    "cacheRead": 77293452,
+    "cacheWrite": 1719908,
+    "reasoning": 0
+   },
+   "clients": [
+    {
+     "client": "claude",
+     "modelId": "claude-fable-5",
+     "providerId": "anthropic",
+     "tokens": {
+      "input": 52125,
+      "output": 250857,
+      "cacheRead": 77293452,
+      "cacheWrite": 1719908,
+      "reasoning": 0
+     },
+     "cost": 111.856413,
+     "messages": 218
+    },
+    {
+     "client": "claude",
+     "modelId": "<synthetic>",
+     "providerId": "unknown",
+     "tokens": {
+      "input": 0,
+      "output": 0,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "reasoning": 0
+     },
+     "cost": 0.0,
+     "messages": 0
+    }
+   ],
+   "activeTimeMs": 42192041
+  },
+  {
+   "date": "2026-08-19",
+   "totals": {
+    "tokens": 78240642,
+    "cost": 106.012235,
+    "messages": 133
+   },
+   "intensity": 2,
+   "tokenBreakdown": {
+    "input": 22250,
+    "output": 201033,
+    "cacheRead": 76476428,
+    "cacheWrite": 1540932,
+    "reasoning": 0
+   },
+   "clients": [
+    {
+     "client": "claude",
+     "modelId": "<synthetic>",
+     "providerId": "unknown",
+     "tokens": {
+      "input": 0,
+      "output": 0,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "reasoning": 0
+     },
+     "cost": 0.0,
+     "messages": 0
+    },
+    {
+     "client": "claude",
+     "modelId": "claude-fable-5",
+     "providerId": "anthropic",
+     "tokens": {
+      "input": 22250,
+      "output": 201033,
+      "cacheRead": 76476428,
+      "cacheWrite": 1540932,
+      "reasoning": 0
+     },
+     "cost": 106.012235,
+     "messages": 133
+    }
+   ],
+   "activeTimeMs": 39207504
+  },
+  {
+   "date": "2026-08-20",
+   "totals": {
+    "tokens": 30530350,
+    "cost": 44.867157,
+    "messages": 75
+   },
+   "intensity": 1,
+   "tokenBreakdown": {
+    "input": 25188,
+    "output": 89660,
+    "cacheRead": 29570564,
+    "cacheWrite": 844939,
+    "reasoning": 0
+   },
+   "clients": [
+    {
+     "client": "claude",
+     "modelId": "claude-fable-5",
+     "providerId": "anthropic",
+     "tokens": {
+      "input": 25188,
+      "output": 89660,
+      "cacheRead": 29570564,
+      "cacheWrite": 844939,
+      "reasoning": 0
+     },
+     "cost": 44.867157,
+     "messages": 75
+    }
+   ],
+   "activeTimeMs": 37773944
+  },
+  {
+   "date": "2026-08-21",
+   "totals": {
+    "tokens": 37309986,
+    "cost": 44.129407,
+    "messages": 104
+   },
+   "intensity": 1,
+   "tokenBreakdown": {
+    "input": 53310,
+    "output": 113164,
+    "cacheRead": 36136464,
+    "cacheWrite": 1007048,
+    "reasoning": 0
+   },
+   "clients": [
+    {
+     "client": "claude",
+     "modelId": "claude-fable-5",
+     "providerId": "anthropic",
+     "tokens": {
+      "input": 20563,
+      "output": 84187,
+      "cacheRead": 25783218,
+      "cacheWrite": 251580,
+      "reasoning": 0
+     },
+     "cost": 33.342964,
+     "messages": 70
+    },
+    {
+     "client": "claude",
+     "modelId": "claude-opus-5",
+     "providerId": "anthropic",
+     "tokens": {
+      "input": 32747,
+      "output": 28976,
+      "cacheRead": 10353246,
+      "cacheWrite": 755468,
+      "reasoning": 0
+     },
+     "cost": 10.786442,
+     "messages": 34
+    }
+   ],
+   "activeTimeMs": 15496257
+  }
+ ]
+}
