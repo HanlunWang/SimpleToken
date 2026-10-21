@@ -21,8 +21,15 @@ type winState struct {
 	gridW         float32
 	keyDraft      string // Claude session key being pasted (never shown again once saved)
 	login         *bool  // open-at-login state, read once per window
+	usageDay      string // the day the 1D usage chart shows ("" today)
+	calOpen       bool
+	calDate       time.Time
+	winW          float32
 	bitmaps       map[string]*ui.Bitmap
 }
+
+// narrow is a window too small for the top bar's range picker (it moves to a row of its own).
+func (w *winState) narrow() bool { return w.winW > 0 && w.winW < 760 }
 
 // bitmap decodes a PNG once per window (menu bar previews redraw every frame).
 func (w *winState) bitmap(png []byte) (*ui.Bitmap, error) {
@@ -64,8 +71,15 @@ func (a *ctrl) windowView(c *ui.Context) {
 			w.settings = false
 		}
 	}
-	ui.Column(c.Key("root")).Fill().Background(p.BG).Children(func() {
+	root := ui.Column(c.Key("root")).Fill().Background(p.BG)
+	if b := root.Bounds(); b.W > 0 {
+		w.winW = b.W
+	}
+	root.Children(func() {
 		a.topBar(c, p)
+		if !w.settings && w.narrow() {
+			ui.Row(c.Key("range2")).FillWidth().Padding(8, 12).Justify(ui.Center).Shrink(0).Children(func() { a.rangePicker(c, p) })
+		}
 		if w.settings {
 			ui.Column(c.Key("settings")).Grow(1).FillWidth().MinHeight(0).
 				Transition(ui.ElementTransition{Duration: 200 * time.Millisecond, Enter: &ui.Motion{X: 16}}).
@@ -110,17 +124,8 @@ func (a *ctrl) topBar(c *ui.Context, p palette) {
 			return
 		}
 		a.refreshControl(c, p)
-		ranges := make([]string, len(analytics.Ranges))
-		sel := 0
-		for i, r := range analytics.Ranges {
-			ranges[i] = string(r)
-			if string(r) == m.s.Range {
-				sel = i
-			}
-		}
-		if n := p.segmented(c, "range", sel, ranges...); n != sel {
-			m.s.Range = ranges[n]
-			a.saveSettings()
+		if !w.narrow() {
+			a.rangePicker(c, p)
 		}
 		if p.iconBtn(c, "edit", pick(w.editing, "check", "layout-grid"), pick(w.editing, L("Done"), L("Widgets")), w.editing).Clicked() {
 			w.editing = !w.editing
@@ -130,6 +135,24 @@ func (a *ctrl) topBar(c *ui.Context, p palette) {
 			w.settings = true
 		}
 	})
+}
+
+// rangePicker is the 1D … ALL segmented control.
+func (a *ctrl) rangePicker(c *ui.Context, p palette) {
+	m := a.m
+	ranges := make([]string, len(analytics.Ranges))
+	sel := 0
+	for i, r := range analytics.Ranges {
+		ranges[i] = string(r)
+		if string(r) == m.s.Range {
+			sel = i
+		}
+	}
+	if n := p.segmented(c, "range", sel, ranges...); n != sel {
+		m.s.Range = ranges[n]
+		a.w.usageDay = ""
+		a.saveSettings()
+	}
 }
 
 // refreshControl shows the last update; only a manual refresh animates it (background ticks never do).
@@ -153,7 +176,9 @@ func (a *ctrl) refreshControl(c *ui.Context, p palette) {
 		} else {
 			ui.Box(c).Size(5, 5).Radius(2.5).Background(pick(m.d.Collected, p.Sig, p.L4)).Shadow(0, 0, 5, 0, pick(m.d.Collected, p.glow(), ui.Transparent))
 		}
-		p.mono(c, label, 11.5, p.T2)
+		if !a.w.narrow() {
+			p.mono(c, label, 11.5, p.T2)
+		}
 	})
 	if b.Clicked() {
 		a.refreshAll()
@@ -172,6 +197,10 @@ func (a *ctrl) footer(c *ui.Context, p palette) {
 		p.mono(c, L("Data from this Mac"), 10.5, p.T4)
 		p.mono(c, "·", 10.5, p.T4)
 		p.mono(c, L("Drag a widget to move it, right-click to resize"), 10.5, p.T4)
+		if m.d.LegacyMerged {
+			p.mono(c, "·", 10.5, p.T4)
+			p.mono(c, L("Token Monitor history merged"), 10.5, p.T4)
+		}
 		if n := len(m.s.ExcludedModels) + len(m.s.ExcludedClients); n > 0 {
 			p.mono(c, "·", 10.5, p.T4)
 			p.mono(c, L("%lld excluded", n), 10.5, p.T4)

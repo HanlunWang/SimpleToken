@@ -87,3 +87,20 @@ func TestSettingsRender(t *testing.T) {
 		shot(t, tt, "settings-"+tab[0])
 	}
 }
+
+func TestTodayAndNarrowRender(t *testing.T) {
+	a := newDemoCtrl(t)
+	a.m.s.Range = "1D"
+	tt := ui.NewTester(a.windowView, 1180, 2700)
+	tt.Frame()
+	tt.Frame()
+	if !tt.HasText("USAGE CHART") {
+		t.Fatalf("missing the usage chart: %q", tt.Texts())
+	}
+	shot(t, tt, "window-today")
+	b := newDemoCtrl(t)
+	nt := ui.NewTester(b.windowView, 700, 1800)
+	nt.Frame()
+	nt.Frame()
+	shot(t, nt, "window-narrow")
+}

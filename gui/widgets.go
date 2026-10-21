@@ -105,6 +105,9 @@ func (a *ctrl) cardNote(id string, rep analytics.Report) string {
 	case "flow":
 		return L("%@ · %lld tools", fmtr.L(rep.Range.Label()), len(rep.Clients))
 	case "usage":
+		if rep.Range == analytics.RangeDay {
+			return pick(a.m.s.IntradayMinutes == 30, L("Every 30 min"), L("Hourly"))
+		}
 		return pick(rep.WeeklyBuckets, L("Weekly"), L("Daily"))
 	case "punchcard":
 		return "Claude Code"
@@ -180,6 +183,12 @@ func (a *ctrl) dayTip(p palette, d analytics.DaySummary) (string, []tipRow) {
 	for _, k := range keys[:min(4, len(keys))] {
 		v := vendorOf(k)
 		rows = append(rows, tipRow{Color: a.m.modelColor(p, k), Logo: vendorLogo(v), LogoC: a.m.vendorTint(p, v), Label: a.m.modelName(k), Value: shortNum(float64(d.ByModel[k])), Dim: true})
+	}
+	if tools := sortedKeys(d.ByClient); len(tools) > 1 {
+		rows = append(rows, tipRow{})
+		for _, k := range tools[:min(3, len(tools))] {
+			rows = append(rows, tipRow{Logo: vendorLogo(k), LogoC: a.m.vendorTint(p, k), Label: toolName(k), Value: shortNum(float64(d.ByClient[k])), Dim: true})
+		}
 	}
 	return upper(format.LongDate(d.Date)), rows
 }
@@ -287,8 +296,13 @@ func (a *ctrl) intradayArea(c *ui.Context, p palette, axes bool, col ui.Color) {
 	now := m.now()
 	slot := now.Hour()*2 + now.Minute()/30
 	today := m.todayHalf()[:slot+1]
+	yest := m.yesterdayHalf()
+	pace := 0.0
+	for _, v := range yest {
+		pace += v
+	}
 	p.areaChart(c, "intraday", areaOpts{
-		Values: today, Compare: m.yesterdayHalf(), ProjectTo: 48, Axes: axes, Columns: false, Color: col, Tick: shortNum,
+		Values: today, Compare: yest, ProjectTo: 48, Axes: axes, Columns: false, Color: col, Tick: shortNum, Pace: pace,
 		Labels: func(i int) string {
 			switch i {
 			case 0:
@@ -855,6 +869,10 @@ func (a *ctrl) flowCard(c *ui.Context, p palette, size cardSize, rep analytics.R
 // ── Usage chart ──
 
 func (a *ctrl) usageCard(c *ui.Context, p palette, size cardSize, rep analytics.Report) {
+	if rep.Range == analytics.RangeDay {
+		a.usageIntraday(c, p, size)
+		return
+	}
 	m := a.m
 	stack := m.s.UsageStack
 	acc := a.accent(p, "usage")
@@ -1229,6 +1247,9 @@ func (a *ctrl) compositionCard(c *ui.Context, p palette, size cardSize, rep anal
 	donut := func(dsize, thick float32) string {
 		_, h := p.donut(c, "donut", parts, dsize, thick, nil, func(h string) {
 			v, label := hit*100, L("hit rate")
+			if !m.s.CompositionShowHitRate {
+				v, label = vals[0]/total*100, L("Cache read")
+			}
 			for i, k := range compKeys {
 				if k[0] == h {
 					v, label = vals[i]/total*100, L(k[1])
@@ -1359,4 +1380,133 @@ func (a *ctrl) costCard(c *ui.Context, p palette, size cardSize) {
 		ui.Column(c.Key("chart")).FillWidth().Grow(1).Children(chart)
 		p.facts(c, facts)
 	}
+}
+
+// usageIntraday is the usage chart at 1D: one day in half-hour or hour slots (Claude Code, from the intraday
+// scanner), stacked by model, with a day navigator; today shows a "now" cap and faint future slots.
+func (a *ctrl) usageIntraday(c *ui.Context, p palette, size cardSize) {
+	m, w := a.m, a.w
+	now := m.now()
+	day := w.usageDay
+	if day == "" {
+		day = m.d.TodayKey
+	}
+	isToday := day == m.d.TodayKey
+	ex := map[string]bool{}
+	for _, x := range m.s.ExcludedModels {
+		ex[x] = true
+	}
+	byModel := m.d.Intra.ModelBuckets(day, ex)
+	hourly := m.s.IntradayMinutes != 30
+	slots := pick(hourly, 24, 48)
+	per := 48 / slots
+	val := func(list []int64, i int) float64 {
+		v := 0.0
+		for k := i * per; k < (i+1)*per && k < len(list); k++ {
+			v += float64(list[k])
+		}
+		return v
+	}
+	stack := m.s.UsageStack
+	rank := m.ranking()
+	sep := max(2, min(8, m.s.SeparateModels))
+	var keys []seriesKey
+	if stack == "model" {
+		for _, md := range rank[:min(sep, len(rank))] {
+			if _, ok := byModel[md]; ok {
+				keys = append(keys, seriesKey{ID: md, Color: m.modelColor(p, md)})
+			}
+		}
+		keys = append(keys, seriesKey{ID: "other", Color: pick(m.s.SeriesColors == "vendor", p.Vendor.Other, p.Ink[3])})
+	} else {
+		keys = []seriesKey{{ID: "all", Color: a.accent(p, "usage")}}
+	}
+	value := func(b, k int) float64 {
+		switch id := keys[k].ID; id {
+		case "all":
+			t := 0.0
+			for _, l := range byModel {
+				t += val(l, b)
+			}
+			return t
+		case "other":
+			t := 0.0
+			for md, l := range byModel {
+				if i := slices.Index(rank, md); i < 0 || i >= sep {
+					t += val(l, b)
+				}
+			}
+			return t
+		default:
+			return val(byModel[id], b)
+		}
+	}
+	total := 0.0
+	for b := range slots {
+		for k := range keys {
+			total += value(b, k)
+		}
+	}
+	nowSlot := (now.Hour()*60 + now.Minute()) / (24 * 60 / slots)
+	slotLabel := func(i int) string {
+		mins := i * 24 * 60 / slots
+		return pad2(mins/60) + ":" + pad2(mins%60)
+	}
+	// Header: total and the day navigator.
+	ui.Row(c.Key("nav")).FillWidth().Gap(10).AlignItems(ui.End).Margin(0, 0, 10).Children(func() {
+		if size != sizeM {
+			a.metricNum(c, p, "t", analytics.MetricTokens, total, 30)
+			p.mono(c, "Claude Code", 10.5, p.T3)
+		}
+		ui.Box(c).Grow(1)
+		t, _ := format.DateFromKey(day)
+		if p.iconBtn(c, "prev", "chevron-left", L("Previous day"), false).Clicked() {
+			w.usageDay = format.DayKey(t.AddDate(0, 0, -1))
+		}
+		label := ui.Row(c.Key("date")).Height(24).Padding(0, 8).Radius(p.rCtl()).AlignItems(ui.Center).Label(L("Choose a day"))
+		label.Background(label.AnimateColor("bg", pick(label.Hovered() || w.calOpen, p.L2, ui.Transparent), animHover))
+		label.Children(func() { p.mono(c, upper(format.Weekday(t)+" "+format.ShortDate(day)), 11, p.T1) })
+		if label.Clicked() {
+			w.calOpen, w.calDate = !w.calOpen, t
+		}
+		ui.Popover(c, label, &w.calOpen, func() {
+			if ui.Calendar(c.Key("cal"), &w.calDate).Changed() {
+				if k := format.DayKey(w.calDate); k <= m.d.TodayKey {
+					w.usageDay = k
+				}
+				w.calOpen = false
+			}
+		})
+		next := p.iconBtn(c, "next", "chevron-right", L("Next day"), false)
+		if next.Clicked() && !isToday {
+			w.usageDay = format.DayKey(t.AddDate(0, 0, 1))
+		}
+		if !isToday && p.button(c, "today", L("Today"), "", btnGhost).Clicked() {
+			w.usageDay = ""
+		}
+	})
+	if total == 0 {
+		p.empty(c, L("No usage in this range"))
+		return
+	}
+	p.barChart(c, "bars", barOpts{
+		Buckets: slots, Keys: keys, Value: value, AvgLine: false, Axes: size != sizeM, Tick: shortNum,
+		Label: slotLabel, LabelAt: func(i int) bool { return i%(slots/4) == 0 }, Now: nowSlot, HasNow: isToday,
+		Tip: func(i int) (string, []tipRow) {
+			rows := []tipRow{}
+			for k, s := range keys {
+				v := value(i, k)
+				if v == 0 && len(keys) > 1 {
+					continue
+				}
+				name := pick(s.ID == "other", L("Other"), pick(s.ID == "all", "Claude Code", m.modelName(s.ID)))
+				row := tipRow{Color: s.Color, Label: name, Value: shortNum(v)}
+				if s.ID != "other" && s.ID != "all" {
+					row.Logo, row.LogoC = vendorLogo(vendorOf(s.ID)), m.vendorTint(p, vendorOf(s.ID))
+				}
+				rows = append(rows, row)
+			}
+			return slotLabel(i) + "–" + slotLabel(i+1), rows
+		},
+	})
 }

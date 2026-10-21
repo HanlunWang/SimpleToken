@@ -67,12 +67,12 @@ func TestMenuBarRenders(t *testing.T) {
 // onBar composes an item on a menu bar strip as macOS would tint a template image.
 func onBar(img image.Image, dark, tmpl bool) image.Image {
 	bg := pick(dark, color.NRGBA{30, 30, 32, 255}, color.NRGBA{236, 236, 238, 255})
-	out := image.NewNRGBA(image.Rect(0, 0, 300, 44))
+	b := img.Bounds()
+	out := image.NewNRGBA(image.Rect(0, 0, max(300, b.Dx()+10), 44))
 	draw.Draw(out, out.Bounds(), &image.Uniform{bg}, image.Point{}, draw.Src)
 	ink := pick(dark, color.NRGBA{255, 255, 255, 255}, color.NRGBA{0, 0, 0, 255})
-	b := img.Bounds()
 	for y := 0; y < b.Dy(); y++ {
-		for x := 0; x < min(b.Dx(), 290); x++ {
+		for x := 0; x < b.Dx(); x++ {
 			r, g, bb, a := img.At(x, y).RGBA()
 			if a == 0 {
 				continue

@@ -3,7 +3,7 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, v2]
   pull_request:
   workflow_dispatch:
 
@@ -25,9 +25,22 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Unit tests
+      - name: Unit tests (Swift app)
         working-directory: SimpleTokenKit
         run: swift test
+
+      - name: Tests (Go app)
+        env:
+          GOTOOLCHAIN: auto   # the runner's Go fetches the version go.mod asks for
+        run: |
+          go version
+          go vet ./...
+          go test ./internal/... ./gui/
+
+      - name: Build the Go app
+        env:
+          GOTOOLCHAIN: auto
+        run: go tool mygo build -skip-dmg -sign -
 
       - name: Install XcodeGen
         run: brew install xcodegen

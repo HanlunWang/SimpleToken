@@ -52,6 +52,8 @@ type ctrl struct {
 	w        *winState
 	quitting bool
 
+	upd updates
+
 	loginGet func() bool
 	loginSet func(bool)
 
@@ -188,6 +190,7 @@ func (a *ctrl) pull() {
 		}
 	}
 	d.Rows = archiveRows(hs.Archive())
+	d.LegacyMerged = hs.ImportedFromLegacy()
 	d.Refreshing = a.coll.IsCollecting()
 	d.Intra = a.intra.Snapshot()
 	d.Limits = a.lim.Entries()
@@ -288,6 +291,9 @@ func (a *ctrl) ready() {
 			}
 		}
 	}()
+	if !a.demo {
+		a.startUpdates()
+	}
 	if os.Getenv("SIMPLETOKEN_SHOW_PANEL") == "1" {
 		time.AfterFunc(1200*time.Millisecond, func() { mygo.RunOnMain(a.togglePanel) })
 	}

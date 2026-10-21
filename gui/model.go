@@ -19,17 +19,18 @@ import (
 // data is everything the views read, copied from the stores on the main thread whenever one of them changes.
 // Views never touch the stores directly.
 type data struct {
-	History     []analytics.DaySummary // filtered daily totals, oldest first (today excluded)
-	Rows        []analytics.Day        // raw tool × model rows per day (for the flow and the usage map)
-	Live        *analytics.DaySummary  // today so far (filtered)
-	TodayKey    string
-	Snapshot    usage.Snapshot    // today / month / all time (unfiltered; filter applied on read)
-	Intra       intraday.Snapshot // Claude Code tokens per half hour per model, last 90 days
-	Limits      []limits.Entry
-	UpdatedAt   time.Time
-	Refreshing  bool
-	Collected   bool // a scan has finished at least once
-	CursorError string
+	History      []analytics.DaySummary // filtered daily totals, oldest first (today excluded)
+	Rows         []analytics.Day        // raw tool × model rows per day (for the flow and the usage map)
+	Live         *analytics.DaySummary  // today so far (filtered)
+	TodayKey     string
+	Snapshot     usage.Snapshot    // today / month / all time (unfiltered; filter applied on read)
+	Intra        intraday.Snapshot // Claude Code tokens per half hour per model, last 90 days
+	Limits       []limits.Entry
+	UpdatedAt    time.Time
+	Refreshing   bool
+	Collected    bool // a scan has finished at least once
+	CursorError  string
+	LegacyMerged bool // the Electron Token Monitor's history was imported
 }
 
 // model memoizes what views derive from data (reports per range × metric, colour slots), keyed by a version

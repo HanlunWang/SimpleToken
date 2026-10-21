@@ -1,76 +1,110 @@
 #!/bin/bash
-# Builds a distributable SimpleToken.zip signed with a Developer ID certificate and, when credentials are
-# given, notarized and stapled. Used locally and by .github/workflows/release.yml (see docs/RELEASING.md).
+# Builds, signs and notarizes SimpleToken (the Go app on mygo) into dist/. Used locally and by
+# .github/workflows/release.yml (see docs/RELEASING.md).
 #
-#   scripts/release.sh                                   # sign and zip (not notarized)
+#   scripts/release.sh                                   # Developer ID signature, not notarized
 #   NOTARY_PROFILE=SimpleToken scripts/release.sh        # notarize with a notarytool keychain profile
 #   NOTARY_KEY=key.p8 NOTARY_KEY_ID=… NOTARY_ISSUER=… scripts/release.sh   # with an App Store Connect API key
 #
 # Environment:
-#   SIGN_IDENTITY         codesign identity (default: "Developer ID Application")
-#   SIGN_KEYCHAIN         keychain holding that identity (default: the keychain search list)
-#   NOTARY_PROFILE        a notarytool keychain profile, created once with
-#                         `xcrun notarytool store-credentials <name> --apple-id <id> --team-id <team>`
+#   SIGN_IDENTITY              codesign identity (default: the only "Developer ID Application" one found)
+#   SIGN_KEYCHAIN              keychain holding it (default: the search list)
+#   NOTARY_PROFILE             a notarytool keychain profile
 #   NOTARY_KEY, NOTARY_KEY_ID, NOTARY_ISSUER
-#                         an App Store Connect API key: the .p8 file, its key id and the issuer id
-#   REQUIRE_NOTARIZATION  1: fail rather than produce a zip that is not notarized
+#                              an App Store Connect API key: the .p8 file, its key id and the issuer id
+#   MYGO_UPDATER_PRIVATE_KEY   the Ed25519 key that signs updates (contents of mygo-update.key); with it the
+#                              build also writes the update archive and manifest that installed apps read
+#   REQUIRE_NOTARIZATION=1     fail rather than produce an app that is not notarized
+#   REQUIRE_UPDATES=1          fail rather than produce a release installed apps cannot update to
 #
-# Output: dist/SimpleToken-<version>.zip and dist/SimpleToken-<version>.zip.sha256.
-# Nothing secret is printed: credentials only reach codesign and notarytool.
+# mygo signs (inside out, hardened runtime, timestamp), notarizes the disk image, staples the app and the image,
+# and signs the update archive. Its configuration gets the identity and notary profile for this run only:
+# mygo.json is restored afterwards. Nothing secret is printed.
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
-IDENTITY="${SIGN_IDENTITY:-Developer ID Application}"
-VERSION=$(sed -n 's/.*CFBundleShortVersionString: "\(.*\)"/\1/p' project.yml)
-BUILD_DIR=build/release
-APP="$BUILD_DIR/Build/Products/Release/SimpleToken.app"
+VERSION=$(plutil -extract version raw -o - mygo.json)
+OUT=build/release
+PLATFORM_DIR="$OUT/darwin-arm64"
 DIST=dist
-NAME="SimpleToken-$VERSION.zip"
-ZIP="$DIST/$NAME"
+PROFILE="simpletoken-notary-$$"
 
 if [ -n "${NOTARY_KEY:-}" ]; then
   : "${NOTARY_KEY_ID:?NOTARY_KEY_ID is required with NOTARY_KEY}" "${NOTARY_ISSUER:?NOTARY_ISSUER is required with NOTARY_KEY}"
   NOTARIZE=key
 elif [ -n "${NOTARY_PROFILE:-}" ]; then
   NOTARIZE=profile
+  PROFILE="$NOTARY_PROFILE"
 elif [ "${REQUIRE_NOTARIZATION:-}" = 1 ]; then
   echo "error: notarization is required but no credentials were given (NOTARY_KEY… or NOTARY_PROFILE)" >&2
   exit 1
 else
   NOTARIZE=
 fi
+if [ "${REQUIRE_UPDATES:-}" = 1 ]; then
+  [ -n "${MYGO_UPDATER_PRIVATE_KEY:-}" ] || { echo "error: updates are required but MYGO_UPDATER_PRIVATE_KEY is not set" >&2; exit 1; }
+  plutil -extract updates.publicKey raw -o - mygo.json >/dev/null 2>&1 || { echo "error: mygo.json has no updates.publicKey" >&2; exit 1; }
+fi
 
-sign() {
-  if [ -n "${SIGN_KEYCHAIN:-}" ]; then
-    codesign --force --timestamp --keychain "$SIGN_KEYCHAIN" --sign "$IDENTITY" "$@"
-  else
-    codesign --force --timestamp --sign "$IDENTITY" "$@"
-  fi
-}
+# The identity: the one asked for, else the single Developer ID Application identity available.
+if [ -z "${SIGN_IDENTITY:-}" ]; then
+  ids=$(security find-identity -v -p codesigning ${SIGN_KEYCHAIN:+"$SIGN_KEYCHAIN"} | sed -n 's/.*"\(Developer ID Application: [^"]*\)".*/\1/p' | sort -u)
+  [ "$(printf '%s\n' "$ids" | grep -c .)" = 1 ] || { echo "error: expected exactly one Developer ID Application identity; set SIGN_IDENTITY" >&2; exit 1; }
+  SIGN_IDENTITY=$ids
+fi
 
-notary() {
+echo "==> Testing"
+go vet ./...
+go test ./internal/... ./gui/
+
+# Release notes for the update manifest: this version's section, in the CHANGELOG shape mygo reads.
+mkdir -p "$OUT"
+notes="docs/releases/$VERSION.md"
+changelog="$OUT/CHANGELOG.md"
+{ echo "## $VERSION"; echo; if [ -f "$notes" ]; then cat "$notes"; else echo "SimpleToken $VERSION"; fi; } > "$changelog"
+
+cp mygo.json "$OUT/mygo.json.orig"
+restore() {
+  cp "$OUT/mygo.json.orig" mygo.json
   if [ "$NOTARIZE" = key ]; then
-    xcrun notarytool "$@" --key "$NOTARY_KEY" --key-id "$NOTARY_KEY_ID" --issuer "$NOTARY_ISSUER"
-  else
-    xcrun notarytool "$@" --keychain-profile "$NOTARY_PROFILE"
+    # The profile lives in the signing keychain (CI) or the login keychain; drop it either way.
+    security delete-generic-password -s "com.apple.gke.notary.tool" -a "com.apple.gke.notary.tool.saved-creds.$PROFILE" ${SIGN_KEYCHAIN:+"$SIGN_KEYCHAIN"} >/dev/null 2>&1 || true
   fi
 }
+trap restore EXIT
 
-echo "==> Building SimpleToken $VERSION"
-rm -rf "$APP"
-xcodegen generate >/dev/null
-xcodebuild -project SimpleToken.xcodeproj -scheme SimpleToken -configuration Release \
-  -destination 'generic/platform=macOS' -derivedDataPath "$BUILD_DIR" \
-  ARCHS=arm64 CODE_SIGN_IDENTITY=- DEVELOPMENT_TEAM= \
-  build | grep -E "error:|BUILD" || true
-[ -d "$APP" ] || { echo "error: build failed" >&2; exit 1; }
+if [ "$NOTARIZE" = key ]; then
+  xcrun notarytool store-credentials "$PROFILE" --key "$NOTARY_KEY" --key-id "$NOTARY_KEY_ID" --issuer "$NOTARY_ISSUER" \
+    ${SIGN_KEYCHAIN:+--keychain "$SIGN_KEYCHAIN"} >/dev/null
+fi
 
-echo "==> Stripping debug symbols"
-# The debug map in an unstripped binary lists the object files by their absolute build path
-find "$APP/Contents/MacOS" -type f -exec codesign --remove-signature {} \; -exec xcrun strip -S {} \;
+# This run's configuration: identity, notary profile, changelog.
+python3 - "$SIGN_IDENTITY" "$NOTARIZE" "$PROFILE" "${SIGN_KEYCHAIN:-}" "$changelog" <<'EOF'
+import json, sys
+identity, notarize, profile, keychain, changelog = sys.argv[1:]
+c = json.load(open("mygo.json"))
+mac = c.setdefault("macos", {})
+mac["signingIdentity"] = identity
+if notarize:
+    mac["notarize"] = {"keychainProfile": profile}
+    if keychain:
+        mac["notarize"]["keychain"] = keychain
+if "updates" in c:
+    c["updates"]["changelog"] = changelog
+json.dump(c, open("mygo.json", "w"), indent=2)
+EOF
+
+echo "==> Building SimpleToken $VERSION (signing as the Developer ID identity)"
+rm -rf "$PLATFORM_DIR"
+flags=(-o "$OUT")
+[ -z "$NOTARIZE" ] && flags+=(-skip-notarize)
+go tool mygo build "${flags[@]}"
+
+APP="$PLATFORM_DIR/SimpleToken.app"
+[ -d "$APP" ] || { echo "error: no app in $PLATFORM_DIR" >&2; exit 1; }
 
 echo "==> Checking the app for build-machine paths"
-# Our own code must not carry source or build paths (#filePath, debug maps); the bundled tokscale is third-party.
+# Our own code must not carry source or build paths; the bundled tokscale is third-party.
 leaks=$(find "$APP/Contents" -type f -not -path "*/Resources/tokscale/*" -exec /usr/bin/grep -l -a -E "/Users/[^/]+/|/home/[^/]+/" {} + || true)
 if [ -n "$leaks" ]; then
   echo "error: these files contain paths from the build machine:" >&2
@@ -78,40 +112,21 @@ if [ -n "$leaks" ]; then
   exit 1
 fi
 
-echo "==> Signing with $IDENTITY (hardened runtime)"
-# The build is signed ad-hoc; re-sign inside out: loose Mach-O files, nested bundles, then the app.
-find "$APP/Contents/Resources" -type f | while read -r f; do
-  if file "$f" | grep -q "Mach-O"; then
-    sign --options runtime "$f"
-  fi
-done
-find "$APP/Contents/Resources" -maxdepth 1 -name "*.bundle" | while read -r b; do
-  sign "$b"
-done
-sign --options runtime "$APP"
 codesign --verify --deep --strict --verbose=1 "$APP"
-
-mkdir -p "$DIST"
-rm -f "$ZIP" "$ZIP.sha256"
-ditto -c -k --keepParent "$APP" "$ZIP"
-
 if [ -n "$NOTARIZE" ]; then
-  echo "==> Notarizing (this can take a few minutes)"
-  result=$(notary submit "$ZIP" --wait --output-format json)
-  status=$(printf '%s' "$result" | plutil -extract status raw -o - - 2>/dev/null || true)
-  if [ "$status" != "Accepted" ]; then
-    echo "error: notarization finished with status '${status:-unknown}'" >&2
-    id=$(printf '%s' "$result" | plutil -extract id raw -o - - 2>/dev/null || true)
-    [ -n "$id" ] && notary log "$id" >&2 || true
-    exit 1
-  fi
-  xcrun stapler staple "$APP"
-  rm -f "$ZIP"
-  ditto -c -k --keepParent "$APP" "$ZIP"
+  xcrun stapler validate "$APP"
   spctl --assess --type execute --verbose "$APP"
-else
-  echo "==> Skipping notarization (set NOTARY_PROFILE or NOTARY_KEY to notarize)"
 fi
 
-(cd "$DIST" && shasum -a 256 "$NAME" > "$NAME.sha256" && cat "$NAME.sha256")
-echo "==> $ZIP"
+echo "==> Collecting the release files"
+mkdir -p "$DIST"
+rm -f "$DIST"/SimpleToken-"$VERSION"* "$DIST"/update-darwin-arm64.json
+for f in "$PLATFORM_DIR"/*.dmg "$PLATFORM_DIR"/*.tar.gz "$PLATFORM_DIR"/*.delta "$PLATFORM_DIR"/update-*.json; do
+  [ -e "$f" ] && cp "$f" "$DIST/"
+done
+dmg=$(ls "$DIST"/*"$VERSION"*.dmg 2>/dev/null | head -1 || true)
+[ -n "$dmg" ] || { echo "error: no disk image was built" >&2; exit 1; }
+named="$DIST/SimpleToken-$VERSION.dmg"
+[ "$dmg" = "$named" ] || mv "$dmg" "$named"
+(cd "$DIST" && shasum -a 256 "SimpleToken-$VERSION.dmg" > "SimpleToken-$VERSION.dmg.sha256" && cat "SimpleToken-$VERSION.dmg.sha256")
+ls -1 "$DIST"

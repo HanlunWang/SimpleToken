@@ -156,6 +156,7 @@ func (a *ctrl) setGeneral(c *ui.Context, p palette) {
 				a.loginSet(*a.w.login)
 			}
 		})
+		a.updateRows(c, p)
 		p.sRow(c, "quit", L("Quit"), L("SimpleToken keeps running in the menu bar when the window is closed"), func() {
 			if p.button(c, "q", L("Quit SimpleToken"), "", btnPlain).Clicked() {
 				mygo.App.Quit()
@@ -460,7 +461,7 @@ func (a *ctrl) setModels(c *ui.Context, p palette) {
 			v := vendorOf(id)
 			inc := !slices.Contains(s.ExcludedModels, id)
 			ui.Row(c.Key(id)).FillWidth().Padding(8, 0).Gap(10).AlignItems(ui.Center).Children(func() {
-				swatch(c, m.modelColor(p, id), 10)
+				a.colorWell(c, p, s.ModelColorOverrides, id, m.modelColor(p, id))
 				logo(c, vendorLogo(v), 16, m.vendorTint(p, v))
 				ui.Column(c).Grow(1).MinWidth(0).Gap(2).Children(func() {
 					ui.Text(c, id).Font(monoFont).FontSize(12).TextColor(pick(inc, p.T1, p.T3)).SingleLine().Ellipsis("…")
@@ -496,7 +497,7 @@ func (a *ctrl) setModels(c *ui.Context, p palette) {
 			id := sh.Key
 			inc := !slices.Contains(s.ExcludedClients, id)
 			ui.Row(c.Key(id)).FillWidth().Padding(8, 0).Gap(10).AlignItems(ui.Center).Children(func() {
-				swatch(c, m.toolColor(p, id), 10)
+				a.colorWell(c, p, s.ToolColorOverrides, id, m.toolColor(p, id))
 				logo(c, vendorLogo(id), 16, m.vendorTint(p, id))
 				ui.Column(c).Grow(1).Gap(2).Children(func() {
 					ui.Text(c, toolName(id)).FontSize(12.5).TextColor(pick(inc, p.T1, p.T3)).SingleLine()
@@ -643,14 +644,37 @@ func (a *ctrl) cardBack(c *ui.Context, p palette, pl placed) {
 				a.segRow(c, p, "metric", L("Metric"), L("Shared with the main metric in General"), &s.Metric, [][2]string{{"tokens", "Tokens"}, {"cost", "Cost"}, {"messages", "Messages"}})
 				a.toggleRow(c, p, "prev", L("Previous period line"), "", &s.HeroShowPrevious)
 			case "limits":
+				p.sRow(c, "used", L("Numbers show"), "", func() {
+					sel := pick(s.LimitShowUsed, 0, 1)
+					if n := p.segmented(c, "s", sel, L("Used"), L("Left")); n != sel {
+						s.LimitShowUsed = n == 0
+						a.saveSettings()
+					}
+				})
+				p.sRow(c, "providers", L("Providers"), "", func() {
+					for _, prov := range limits.Providers {
+						on := !slices.Contains(s.HiddenLimitProviders, string(prov))
+						if p.chip(c, string(prov), prov.DisplayName(), on).Clicked() {
+							a.setExcluded(&s.HiddenLimitProviders, string(prov), on)
+						}
+					}
+				})
 				a.toggleRow(c, p, "buckets", L("Per-model extra limits"), "", &s.LimitShowModelBuckets)
 				a.toggleRow(c, p, "pace", L("Even-pace line"), "", &s.LimitShowPace)
+				p.sRow(c, "refresh", L("Refresh Now"), "", func() {
+					if p.button(c, "r", L("Refresh Now"), "rotate-cw", btnPlain).Clicked() {
+						a.lim.RefreshNow()
+					}
+				})
 			case "models":
 				a.segRow(c, p, "share", L("Share by"), "", &s.ModelsMetric, [][2]string{{"tokens", "Tokens"}, {"cost", "Cost"}})
 				a.toggleRow(c, p, "spark", L("Sparklines"), "", &s.ModelsShowSparklines)
 				series()
 			case "usage":
 				a.segRow(c, p, "stack", L("Stacking"), "", &s.UsageStack, [][2]string{{"model", "By model"}, {"tool", "By tool"}, {"none", "Unstacked"}})
+				a.intSeg(c, p, "interval", L("1D interval"), L("Today and single days, from Claude Code's logs"), &s.IntradayMinutes, []int{60, 30}, func(v int) string {
+					return pick(v == 60, L("Hourly"), L("Every 30 min"))
+				})
 				a.toggleRow(c, p, "avg", L("Average line"), "", &s.UsageShowAverage)
 				series()
 			case "calendar":
@@ -662,12 +686,27 @@ func (a *ctrl) cardBack(c *ui.Context, p palette, pl placed) {
 				a.intSeg(c, p, "days", L("Range"), "", &s.PunchcardDays, []int{7, 30, 90}, func(v int) string { return L("%lld days", v) })
 			case "composition":
 				a.segRow(c, p, "period", L("Period"), "", &s.CompositionPeriod, [][2]string{{"auto", "Match range"}, {"today", "Today"}, {"month", "This month"}, {"allTime", "All time"}})
+				a.toggleRow(c, p, "hit", L("Hit rate in center"), "", &s.CompositionShowHitRate)
 				series()
 			case "cost":
 				a.toggleRow(c, p, "proj", L("Month-end projection"), "", &s.CostShowProjection)
 				a.toggleRow(c, p, "last", L("Last month's total line"), "", &s.CostShowLastMonth)
 				a.toggleRow(c, p, "bars", L("Daily cost bars"), "", &s.CostShowDailyBars)
-			case "map", "flow", "tools":
+			case "tools":
+				series()
+				for _, sh := range m.report("ALL", "tokens").Clients {
+					id := sh.Key
+					inc := !slices.Contains(s.ExcludedClients, id)
+					ui.Row(c.Key("tool-"+id)).FillWidth().Padding(6, 0).Gap(10).AlignItems(ui.Center).Children(func() {
+						a.colorWell(c, p, s.ToolColorOverrides, id, m.toolColor(p, id))
+						logo(c, vendorLogo(id), 14, m.vendorTint(p, id))
+						ui.Text(c, toolName(id)).FontSize(12).TextColor(pick(inc, p.T1, p.T3)).Grow(1).SingleLine()
+						if p.toggle(c, "inc", &inc).Changed() {
+							a.setExcluded(&s.ExcludedClients, id, !inc)
+						}
+					})
+				}
+			case "map", "flow":
 				series()
 			}
 			if pl.id == "hero" || pl.id == "usage" || pl.id == "cost" || pl.id == "calendar" || pl.id == "punchcard" || def.Stat {
@@ -698,5 +737,68 @@ func (a *ctrl) cardBack(c *ui.Context, p palette, pl placed) {
 				})
 			}
 		})
+	})
+}
+
+// colorWell edits a model's or tool's colour override; a reset button appears once one is set.
+func (a *ctrl) colorWell(c *ui.Context, p palette, overrides map[string]string, id string, cur ui.Color) {
+	ui.Row(c.Key("color")).Gap(2).AlignItems(ui.Center).Shrink(0).Children(func() {
+		col := cur
+		if ui.ColorWell(c.Key("well"), &col).Label(L("Color")).Size(22, 22).Changed() {
+			overrides[id] = hexColor(col)
+			a.saveSettings()
+		}
+		if overrides[id] != "" {
+			if p.iconBtn(c, "reset", "rotate-ccw", L("Restore default color"), false).Clicked() {
+				delete(overrides, id)
+				a.saveSettings()
+			}
+		}
+	})
+}
+
+func hexColor(c ui.Color) string {
+	const digits = "0123456789abcdef"
+	b := []byte{'#', 0, 0, 0, 0, 0, 0}
+	for i, v := range []uint8{c.R, c.G, c.B} {
+		b[1+2*i], b[2+2*i] = digits[v>>4], digits[v&15]
+	}
+	return string(b)
+}
+
+// updateRows are the update settings: automatic install, check now, restart once a version is installed.
+func (a *ctrl) updateRows(c *ui.Context, p palette) {
+	s := &a.m.s
+	enabled := mygo.Updater.Enabled()
+	detail := L("Version %@", mygo.App.Version())
+	if !enabled {
+		detail += " · " + L("This build does not update itself")
+	}
+	a.toggleRow(c, p, "auto", L("Download and install updates"), detail, &s.AutoUpdate)
+	if !enabled {
+		return
+	}
+	busy, ready, checked, errText := a.upd.state()
+	status := L("Not checked yet")
+	switch {
+	case busy:
+		status = L("Checking…")
+	case ready != "":
+		status = L("Version %@ is installed and runs at the next launch", ready)
+	case errText != "":
+		status = errText
+	case !checked.IsZero():
+		status = L("Up to date") + " · " + fmtr.Ago(checked, a.m.now())
+	}
+	p.sRow(c, "check", L("Updates"), status, func() {
+		if ready != "" {
+			if p.button(c, "restart", L("Restart Now"), "rotate-cw", btnPrimary).Clicked() {
+				mygo.App.Relaunch()
+			}
+			return
+		}
+		if p.button(c, "now", L("Check Now"), "", btnPlain).Clicked() && !busy {
+			go a.installUpdate()
+		}
 	})
 }

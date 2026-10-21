@@ -1,8 +1,9 @@
 # Pushing a tag vX.Y.Z builds, signs, notarizes and publishes SimpleToken X.Y.Z (see docs/RELEASING.md).
 # Running it by hand from main does everything except publishing: a check that signing and notarization work.
 #
-# The signing and notarization secrets live in the "release" environment, which only accepts runs from v* tags
-# and main. They are decoded into files under the runner's temp directory, used, and removed; nothing is echoed.
+# The signing, notarization and update-signing secrets live in the "release" environment, which only accepts runs
+# from v* tags and main. They are decoded into files under the runner's temp directory, used, and removed; nothing
+# is echoed. mygo signs, notarizes and staples the app and its disk image and signs the update archive.
 name: Release
 
 on:
@@ -26,6 +27,7 @@ jobs:
       contents: write   # create the release and upload its files
     env:
       DEVELOPER_DIR: /Applications/Xcode_27.0.app/Contents/Developer
+      GOTOOLCHAIN: auto
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -37,19 +39,12 @@ jobs:
           REF_TYPE: ${{ github.ref_type }}
           REF_NAME: ${{ github.ref_name }}
         run: |
-          version=$(sed -n 's/.*CFBundleShortVersionString: "\(.*\)"/\1/p' project.yml)
+          version=$(plutil -extract version raw -o - mygo.json)
           if [ "$REF_TYPE" = tag ] && [ "$REF_NAME" != "v$version" ]; then
-            echo "::error::Tag $REF_NAME does not match the version in project.yml ($version)"
+            echo "::error::Tag $REF_NAME does not match the version in mygo.json ($version)"
             exit 1
           fi
           echo "version=$version" >> "$GITHUB_OUTPUT"
-
-      - name: Unit tests
-        working-directory: SimpleTokenKit
-        run: swift test
-
-      - name: Install XcodeGen
-        run: brew install xcodegen
 
       - name: Signing keychain
         env:
@@ -74,7 +69,9 @@ jobs:
           NOTARY_KEY: ${{ runner.temp }}/notary-key.p8
           NOTARY_KEY_ID: ${{ secrets.NOTARY_KEY_ID }}
           NOTARY_ISSUER: ${{ secrets.NOTARY_ISSUER_ID }}
+          MYGO_UPDATER_PRIVATE_KEY: ${{ secrets.MYGO_UPDATER_PRIVATE_KEY }}
           REQUIRE_NOTARIZATION: "1"
+          REQUIRE_UPDATES: ${{ github.ref_type == 'tag' && '1' || '0' }}
         run: scripts/release.sh
 
       - name: Publish the release
@@ -85,13 +82,15 @@ jobs:
           TAG: ${{ github.ref_name }}
           VERSION: ${{ steps.version.outputs.version }}
         run: |
-          zip="dist/SimpleToken-$VERSION.zip"
+          # The disk image for people, the update archive + manifest for installed apps (they read
+          # releases/latest/download/update-darwin-arm64.json).
+          files=(dist/*)
           if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" "$zip" "$zip.sha256" --clobber
+            gh release upload "$TAG" "${files[@]}" --clobber
           elif [ -f "docs/releases/$VERSION.md" ]; then
-            gh release create "$TAG" "$zip" "$zip.sha256" --verify-tag --title "SimpleToken $VERSION" --notes-file "docs/releases/$VERSION.md"
+            gh release create "$TAG" "${files[@]}" --verify-tag --title "SimpleToken $VERSION" --notes-file "docs/releases/$VERSION.md"
           else
-            gh release create "$TAG" "$zip" "$zip.sha256" --verify-tag --title "SimpleToken $VERSION" --generate-notes
+            gh release create "$TAG" "${files[@]}" --verify-tag --title "SimpleToken $VERSION" --generate-notes
           fi
 
       - name: Clean up

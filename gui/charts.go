@@ -128,6 +128,8 @@ type areaOpts struct {
 	Tick      func(v float64) string
 	Color     ui.Color
 	Tip       func(i int, cum float64) (string, []tipRow)
+	// Pace draws a dashed straight line from 0 to Pace at the period's end (even pace to a target).
+	Pace float64
 }
 
 func (p palette) areaChart(c *ui.Context, key string, o areaOpts) ui.Element {
@@ -147,7 +149,7 @@ func (p palette) areaChart(c *ui.Context, key string, o areaOpts) ui.Element {
 	if len(ccum) > 0 {
 		top = math.Max(top, ccum[len(ccum)-1])
 	}
-	maxV := niceMax(math.Max(top, proj) * 1.04)
+	maxV := niceMax(math.Max(math.Max(top, proj), o.Pace) * 1.04)
 	colMax := 1.0
 	for _, v := range o.Values {
 		colMax = math.Max(colMax, v)
@@ -197,6 +199,9 @@ func (p palette) areaChart(c *ui.Context, key string, o areaOpts) ui.Element {
 		}
 		if len(ccum) > 1 {
 			dashPath(pt, line(ccum), p.T3, 1.2, 3, 3)
+		}
+		if o.Pace > 0 {
+			dashPath(pt, [][2]float32{{r.X, Y(0)}, {r.X + X(n-1, iw), Y(o.Pace)}}, alpha(p.Sig, 0.5), 1, 2, 4)
 		}
 		if len(cum) > 0 {
 			pts := line(cum)
@@ -266,6 +271,11 @@ type barOpts struct {
 	Label   func(i int) string
 	Tick    func(v float64) string
 	Tip     func(i int) (string, []tipRow)
+	// Now (with HasNow) marks the current bucket with a signal cap; buckets after it are future (faint stubs).
+	Now    int
+	HasNow bool
+	// LabelAt, when set, picks which buckets get an x label (instead of start, middle, end).
+	LabelAt func(i int) bool
 }
 
 func (p palette) barChart(c *ui.Context, key string, o barOpts) ui.Element {
@@ -305,6 +315,20 @@ func (p palette) barChart(c *ui.Context, key string, o barOpts) ui.Element {
 		bw := iw / float32(max(1, o.Buckets))
 		gap := pick(bw > 6, float32(2), 1)
 		for i := range o.Buckets {
+			if o.HasNow && i > o.Now {
+				pt.Fill(ui.Rect{X: r.X + float32(i)*bw + gap/2, Y: y0 + ih - 2, W: max(1, bw-gap), H: 2}, p.L2, 1)
+				continue
+			}
+			if o.HasNow && i == o.Now {
+				top := 0.0
+				for k := range o.Keys {
+					top += o.Value(i, k)
+				}
+				cy := y0 + ih - float32(top/maxV)*ih*grow - 4
+				cap := ui.Rect{X: r.X + float32(i)*bw + gap/2, Y: cy, W: max(1, bw-gap), H: 2}
+				pt.Shadow(cap, 1, 0, 0, 4, 0, p.glow())
+				pt.Fill(cap, p.Sig, 1)
+			}
 			y := y0 + ih
 			dim := hover >= 0 && hover != i
 			for k, s := range o.Keys {
@@ -331,8 +355,16 @@ func (p palette) barChart(c *ui.Context, key string, o barOpts) ui.Element {
 		}
 		pt.Line(r.X, y0+ih+0.5, r.X+iw, y0+ih+0.5, 1, p.L3)
 		if o.Axes && o.Label != nil && o.Buckets > 0 {
-			for k, i := range []int{0, o.Buckets / 2, o.Buckets - 1} {
-				p.axisText(pt, r.X+float32(i)*bw+bw/2, r.Y+r.H-12, o.Label(i), k)
+			if o.LabelAt != nil {
+				for i := range o.Buckets {
+					if o.LabelAt(i) {
+						p.axisText(pt, r.X+float32(i)*bw, r.Y+r.H-12, o.Label(i), 0)
+					}
+				}
+			} else {
+				for k, i := range []int{0, o.Buckets / 2, o.Buckets - 1} {
+					p.axisText(pt, r.X+float32(i)*bw+bw/2, r.Y+r.H-12, o.Label(i), k)
+				}
 			}
 		}
 	})

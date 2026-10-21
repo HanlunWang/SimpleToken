@@ -22,6 +22,7 @@ type Settings struct {
 	ExactNumbers    bool   `json:"statsExactNumber"`
 	Range           string `json:"dashboardRange"`  // 1D 1W 1M 3M 6M YTD 1Y ALL
 	Metric          string `json:"dashboardMetric"` // tokens cost messages
+	AutoUpdate      bool   `json:"autoUpdate"`
 
 	// Appearance (new in v2)
 	Theme         string `json:"theme"`         // dark light system
@@ -104,7 +105,7 @@ var DefaultHidden = []string{"stat.totalCost", "stat.messages", "stat.topModel",
 // Default returns the settings of a fresh install.
 func Default() Settings {
 	return Settings{
-		ClickOpensPanel: true, Range: "1M", Metric: "tokens",
+		ClickOpensPanel: true, Range: "1M", Metric: "tokens", AutoUpdate: true,
 		Theme: "dark", Palette: "paper", SeriesColors: "ink", VendorMarks: "color", PanelMaterial: "glass",
 		LiveRefreshSeconds: 30, FullRefreshMinutes: 15,
 		LimitShowUsed: true, AlertThresholds: []float64{50, 80}, LimitShowPace: true, LimitShowModelBuckets: true,
