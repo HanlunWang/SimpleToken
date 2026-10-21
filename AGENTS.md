@@ -46,7 +46,7 @@ Release build, 2026-09-29: ~110 MB footprint with the window open, ~0.3% CPU idl
 - The main window and drop-down panel **drop their SwiftUI hierarchy when closed** and rebuild on show; hidden views would otherwise keep re-rendering on every data change.
 - Dense grids (calendar, punchcard, active-day strip) draw with `Canvas` and hit-test by coordinates. Do not go back to one view per cell.
 - Never create `DateFormatter` / `NumberFormatter` / `ISO8601DateFormatter` in render or per-line paths (ICU init is expensive): use the cached ones in `Fmt`. The intraday scanner parses timestamps by hand.
-- Only a manual refresh spins the top-bar refresh icon. Background ticks and limit-probe retries must not drive continuous animations.
+- Only a manual refresh spins the top-bar refresh icon. Background ticks and limit-probe retries must not drive continuous animations or chart morphs: key `.animation(Motion.data, value:)` on the range / metric / series, never on the live numbers (a morphing Canvas redraws on the CPU every frame).
 - `AppState.report(range:metric:)`, `pairs(for:)` (tool × model tokens for the map and flow widgets) and `modelColors` are memoized on a data-version key; derive new views from them rather than recomputing `RangeAnalytics` in bodies.
 
 ## Data sources and gotchas
