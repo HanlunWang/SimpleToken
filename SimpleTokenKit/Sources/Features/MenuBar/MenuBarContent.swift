@@ -54,7 +54,8 @@ enum MenuBarContent {
                                              alert: settings.menuBarAlertColor && window.usedPercent >= threshold)
                 if settings.menuBarShowPace, let elapsed = window.elapsedFraction(now: now) {
                     segment.pace = used ? elapsed : 1 - elapsed
-                    if used, let projected = window.projectedPercent(now: now) { segment.projected = min(1, projected / 100) }
+                    if used, let provider = item.provider.flatMap(LimitProvider.init(rawValue:)),
+                       let projected = state.limits.projectedPercent(window, provider: provider, now: now) { segment.projected = min(1, projected / 100) }
                 }
                 return segment
             case .todayTokens:

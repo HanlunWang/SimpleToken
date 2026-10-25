@@ -14,6 +14,8 @@ public struct ClaudeWebProbe: Sendable {
     public struct Result: Sendable {
         public let limits: ClaudeLimits
         public let renewedSessionKey: String?   // when non-nil the caller must persist it
+        /// The plan of the chosen organization ("Max 5x"), when the organization list was fetched and names one
+        public var planLabel: String? = nil
     }
 
     let sessionKey: String
@@ -29,12 +31,14 @@ public struct ClaudeWebProbe: Sendable {
         var currentKey = sessionKey
 
         let organizationId: String
+        var plan: String?
         if let cachedOrganizationId {
             organizationId = cachedOrganizationId
         } else {
             let (orgsData, renewed1) = try await get("api/organizations", sessionKey: currentKey)
             if let renewed1 { currentKey = renewed1 }
             organizationId = try Self.selectOrganization(from: orgsData)
+            plan = Self.planLabel(fromOrganizations: orgsData, id: organizationId)
         }
 
         let (usageData, renewed2) = try await get(
@@ -44,7 +48,7 @@ public struct ClaudeWebProbe: Sendable {
 
         let limits = try Self.parseUsage(usageData)
         let renewed = currentKey == sessionKey ? nil : currentKey
-        return (Result(limits: limits, renewedSessionKey: renewed), organizationId)
+        return (Result(limits: limits, renewedSessionKey: renewed, planLabel: plan), organizationId)
     }
 
     // MARK: - HTTP
@@ -128,6 +132,23 @@ public struct ClaudeWebProbe: Sendable {
             ?? candidates.first
         guard let chosen else { throw LimitsError.unavailable("no organization") }
         return orgId(chosen)
+    }
+
+    /// The plan of an organization from claude.ai's own record (rate_limit_tier "default_claude_max_5x", capabilities
+    /// "claude_max"): unlike Claude Code's keychain item it follows a plan change at once. nil when neither is there.
+    static func planLabel(fromOrganizations data: Data, id: String) -> String? {
+        guard let root = try? JSONSerialization.jsonObject(with: data) else { return nil }
+        let list = (root as? [[String: Any]])
+            ?? ((root as? [String: Any]).flatMap { ($0["organizations"] ?? $0["data"]) as? [[String: Any]] }) ?? []
+        guard let org = list.first(where: { o in ["uuid", "id", "organization_uuid"].contains { o[$0] as? String == id } })
+        else { return nil }
+        let tier = org["rate_limit_tier"] as? String
+        let capabilities = Set((org["capabilities"] as? [String]) ?? [])
+        let sub = capabilities.contains("claude_max") ? "max"
+            : capabilities.contains("claude_pro") ? "pro"
+            : tier?.lowercased().split(separator: "_").first { ["max", "pro", "team", "enterprise"].contains($0) }.map(String.init)
+        let label = LimitsStore.planLabel(subscriptionType: sub, rateLimitTier: tier)
+        return label.isEmpty ? nil : label
     }
 
     /// usage response → windows (five_hour / seven_day / weekly_scoped Fable in limits[])

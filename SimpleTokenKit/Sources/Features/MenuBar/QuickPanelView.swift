@@ -67,9 +67,9 @@ public struct QuickPanelView: View {
             VStack(spacing: 8) {
                 ForEach(list) { section in
                     switch section {
-                    case .claude: PanelLimits(provider: .claude, snapshot: state.limits.claude, status: state.limits.claudeStatus, colors: colors)
-                    case .codex: PanelLimits(provider: .codex, snapshot: state.limits.codex, status: state.limits.codexStatus, colors: colors)
-                    case .cursor: PanelLimits(provider: .cursor, snapshot: state.limits.cursor, status: state.limits.cursorStatus, colors: colors)
+                    case .claude: PanelLimits(provider: .claude, snapshot: state.limits.claude, status: state.limits.claudeStatus, colors: colors, limits: state.limits)
+                    case .codex: PanelLimits(provider: .codex, snapshot: state.limits.codex, status: state.limits.codexStatus, colors: colors, limits: state.limits)
+                    case .cursor: PanelLimits(provider: .cursor, snapshot: state.limits.cursor, status: state.limits.cursorStatus, colors: colors, limits: state.limits)
                     case .today: PanelToday(state: state)
                     case .models: PanelModels(period: state.period(\.today), colors: colors)
                     case .tools: PanelTools(period: state.period(\.today), colors: colors)
@@ -240,6 +240,7 @@ private struct PanelLimits: View {
     let snapshot: ProviderLimits?
     let status: LimitsStore.Status
     let colors: ModelColors
+    let limits: LimitsStore
     @Bindable private var settings = SettingsStore.shared
 
     /// Used share from which a window wears the warning colour
@@ -287,11 +288,8 @@ private struct PanelLimits: View {
         let used = w.usedPercent / 100
         let showUsed = settings.limitShowUsed
         let elapsed = w.elapsedFraction()
-        // Where the window is heading by its reset at the current pace; not read into a window that has barely started
-        var projected: Double?
-        if showUsed, used > 0, let elapsed, elapsed > 0.05 {
-            projected = min(1, used / max(elapsed, 0.02))
-        }
+        // Where the window is heading by its reset (see LimitsStore.projectedPercent)
+        let projected = showUsed ? limits.projectedPercent(w, provider: provider).map { min(1, $0 / 100) } : nil
         return Reading(fraction: showUsed ? used : 1 - used,
                      pace: settings.limitShowPace ? elapsed.map { showUsed ? $0 : 1 - $0 } : nil,
                      projected: projected,

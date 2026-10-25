@@ -45,6 +45,10 @@ public final class AppState {
         limits = LimitsStore()
         intraday = IntradayStore()
         notifier = LimitNotifier(limits: limits)
+        limits.usageHistory = { [intraday] in
+            guard let at = intraday.scannedAt, Date().timeIntervalSince(at) < 600 else { return nil }
+            return intraday.snapshot
+        }
         // A sync fetches the account's whole usage history (tens of seconds, a few MB), so at most once an hour
         let cursorSync = CursorSync(binary: binary)
         usage.beforeFullScan = { [weak self] in

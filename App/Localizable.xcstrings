@@ -945,17 +945,6 @@
         }
       }
     },
-    "At this pace, by reset": {
-      "extractionState": "manual",
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "按当前速度，重置前"
-          }
-        }
-      }
-    },
     "Average daily usage by weekday; the tallest bar is the busiest weekday.": {
       "extractionState": "manual",
       "localizations": {
@@ -1847,6 +1836,17 @@
         }
       }
     },
+    "Expected by reset": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "重置时预计"
+          }
+        }
+      }
+    },
     "Fill": {
       "extractionState": "manual",
       "localizations": {
@@ -2598,13 +2598,13 @@
         }
       }
     },
-    "Marker = even pace": {
+    "Marker = even pace · → expected at reset": {
       "extractionState": "manual",
       "localizations": {
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "标记 = 匀速位置"
+            "value": "标记 = 匀速位置 · → 重置时预计"
           }
         }
       }
@@ -2858,6 +2858,17 @@
           "stringUnit": {
             "state": "translated",
             "value": "未命中缓存的新输入"
+          }
+        }
+      }
+    },
+    "New window · resets in %@": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "新窗口 · %@后重置"
           }
         }
       }
@@ -4871,6 +4882,17 @@
           "stringUnit": {
             "state": "translated",
             "value": "小组件：显示 / 隐藏、大小。位置直接拖动"
+          }
+        }
+      }
+    },
+    "Window": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "窗口"
           }
         }
       }

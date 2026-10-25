@@ -42,6 +42,18 @@ import Foundation
         #expect(id == "chat-org")
     }
 
+    @Test func readsPlanFromOrganization() throws {
+        let json = """
+        [{"uuid":"api-org","capabilities":["api"]},
+         {"uuid":"chat-org","capabilities":["chat","claude_max"],"rate_limit_tier":"default_claude_max_5x"}]
+        """
+        let data = Data(json.utf8)
+        #expect(ClaudeWebProbe.planLabel(fromOrganizations: data, id: "chat-org") == "Max 5x")
+        #expect(ClaudeWebProbe.planLabel(fromOrganizations: data, id: "api-org") == nil)
+        let tierOnly = Data(#"[{"uuid":"o","rate_limit_tier":"default_claude_max_20x"}]"#.utf8)
+        #expect(ClaudeWebProbe.planLabel(fromOrganizations: tierOnly, id: "o") == "Max 20x")
+    }
+
     @Test func fallsBackToFirstOrganization() throws {
         let json = """
         {"organizations":[{"uuid":"only-org","capabilities":["api"]}]}

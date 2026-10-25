@@ -305,6 +305,8 @@ public actor IntradayScanner {
 @MainActor
 public final class IntradayStore {
     public private(set) var snapshot = IntradayScanner.Snapshot()
+    /// When the last scan finished; scans pause while nothing shows intraday data, so the snapshot can be hours old
+    public private(set) var scannedAt: Date?
     private let scanner: IntradayScanner
     private var timer: Task<Void, Never>?
 
@@ -316,6 +318,7 @@ public final class IntradayStore {
     public func loadDemo(_ demo: IntradayScanner.Snapshot) {
         isDemo = true
         snapshot = demo
+        scannedAt = .distantFuture
     }
     private var isDemo = false
 
@@ -339,5 +342,6 @@ public final class IntradayStore {
         guard !isDemo else { return }
         let next = await scanner.scan()
         if next != snapshot { snapshot = next }
+        scannedAt = Date()
     }
 }

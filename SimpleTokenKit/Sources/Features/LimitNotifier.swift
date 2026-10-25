@@ -59,7 +59,7 @@ public final class LimitNotifier {
         let content = UNMutableNotificationContent()
         content.title = L("\(provider.displayName) · \(LimitsCard.label(window)): \(Int(window.usedPercent.rounded()))% used")
         var parts: [String] = [L("Crossed the \(Int(threshold))% alert threshold")]
-        if let projected = window.projectedPercent() { parts.append(L("On pace for about \(Int(projected.rounded()))% by reset")) }
+        if let projected = limits.projectedPercent(window, provider: provider) { parts.append(L("On pace for about \(Int(projected.rounded()))% by reset")) }
         if let reset = window.resetsAt { parts.append(L("Resets \(LimitsCard.resetFormatter(reset))")) }
         content.body = parts.joined(separator: " · ")
         content.sound = .default

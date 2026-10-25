@@ -52,9 +52,10 @@ public struct LimitWindow: Codable, Equatable, Sendable, Identifiable {
         return min(1, max(0, 1 - resetsAt.timeIntervalSince(now) / spanSeconds))
     }
 
-    /// Projected usage at reset at the current pace (%). nil early in the window (<10%), where extrapolation is unreliable.
+    /// Projected usage at reset in a straight line from the share of the window elapsed (%). nil early in the window
+    /// (<5%), where the line is unreliable; `LimitsStore.projectedPercent` does better for Claude.
     public func projectedPercent(now: Date = Date()) -> Double? {
-        guard usedPercent > 0, let elapsed = elapsedFraction(now: now), elapsed >= 0.1 else { return nil }
+        guard usedPercent > 0, let elapsed = elapsedFraction(now: now), elapsed > 0.05 else { return nil }
         return usedPercent / elapsed
     }
 }

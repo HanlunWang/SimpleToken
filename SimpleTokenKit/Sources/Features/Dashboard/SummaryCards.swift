@@ -21,19 +21,19 @@ private struct LimitReadout {
     let fraction: Double
     /// Even-pace marker (elapsed share of the window), nil when hidden
     let pace: Double?
-    /// Where the window is heading by its reset at the current pace; nil early in the window or in Left mode
+    /// Where the window is heading by its reset (0…1); nil without a forecast or in Left mode
     let projected: Double?
     let percentText: String
     let tint: Color
 
-    init(_ w: LimitWindow, accent: Color, showUsed: Bool, showPace: Bool) {
+    init(_ w: LimitWindow, projected projectedPercent: Double?, accent: Color, showUsed: Bool, showPace: Bool) {
         let used = w.usedPercent / 100
         let elapsed = w.elapsedFraction()
         tint = LimitLevel.tint(used: used, accent: accent)
         if showUsed {
             fraction = used
             pace = showPace ? elapsed : nil
-            projected = elapsed.flatMap { $0 > 0.05 ? min(1, used / max($0, 0.02)) : nil }
+            projected = projectedPercent.map { min(1, $0 / 100) }
             percentText = "\(Int((used * 100).rounded()))%"
         } else {
             fraction = 1 - used
@@ -125,7 +125,8 @@ struct LimitsCard: View {
     }
 
     private func readout(_ w: LimitWindow, _ provider: LimitProvider, pace: Bool = true) -> LimitReadout {
-        LimitReadout(w, accent: accent(provider), showUsed: settings.limitShowUsed, showPace: pace && settings.limitShowPace)
+        LimitReadout(w, projected: limits.projectedPercent(w, provider: provider), accent: accent(provider),
+                     showUsed: settings.limitShowUsed, showPace: pace && settings.limitShowPace)
     }
 
     private var planText: String {
@@ -266,7 +267,7 @@ struct LimitsCard: View {
         return VStack(alignment: .leading, spacing: 8) {
             WidgetHeader(L("Limits"), icon: SettingsStore.Card.limits.icon, onSettings: { flipped = true }) {
                 if settings.limitShowPace, hasWindows {
-                    Text("Marker = even pace")
+                    Text("Marker = even pace · → expected at reset")
                 } else {
                     Text(planText).font(.system(size: Typo.small, design: .monospaced))
                 }
@@ -324,8 +325,15 @@ struct LimitsCard: View {
                     EntityMark(logo: BrandLogos.provider(provider.rawValue), color: colors.toolColor(provider.rawValue), size: 11)
                     Text(Self.label(w)).font(.app(Typo.small, .medium)).foregroundStyle(.secondary)
                         .lineLimit(1).truncationMode(.middle)
+                    if let projected = r.projected {
+                        Text("→ \(Int((projected * 100).rounded()))%").font(.num(Typo.small, .medium)).foregroundStyle(.tertiary)
+                    }
                 }
-                Text(w.resetsAt.map { L("Resets in \(Self.shortCountdown($0))") } ?? " ")
+                Text(w.resetsAt.map { reset in
+                    // A window that has just opened (a reset, a new plan) explains why the pace marker sits at zero
+                    let fresh = w.spanSeconds >= 86400 && (w.elapsedFraction() ?? 1) < 0.05
+                    return fresh ? L("New window · resets in \(Self.shortCountdown(reset))") : L("Resets in \(Self.shortCountdown(reset))")
+                } ?? " ")
                     .font(.app(Typo.axis)).foregroundStyle(.tertiary).monospacedDigit()
                     .lineLimit(1).minimumScaleFactor(0.8)
             }
@@ -370,7 +378,9 @@ struct LimitsCard: View {
         let tipID = "limit.\(provider.rawValue).\(w.id)"
         guard let p else { tip?.hide(tipID); return }
         let updated = shown.first { $0.provider == provider }?.snapshot?.updatedAt
-        tip?.show(tipID, key: w.id, at: p) { LimitTip(window: w, provider: provider, color: color, updatedAt: updated) }
+        tip?.show(tipID, key: w.id, at: p) {
+            LimitTip(window: w, provider: provider, color: color, updatedAt: updated, projected: limits.projectedPercent(w, provider: provider))
+        }
     }
 
     // MARK: Labels (shared with the quick panel and the notifier)
@@ -448,6 +458,7 @@ struct LimitTip: View {
     let provider: LimitProvider
     let color: Color
     var updatedAt: Date?
+    var projected: Double?
 
     var body: some View {
         TipCard(title: "\(provider.displayName) · \(LimitsCard.label(window))",
@@ -457,11 +468,16 @@ struct LimitTip: View {
                 footnote: updatedAt.map(LimitsCard.ago)) {
             TipRow(color: color, label: L("Used"), value: String(format: "%.0f%%", window.usedPercent))
             TipRow(label: L("Left"), value: String(format: "%.0f%%", window.remainingPercent))
+            if let reset = window.resetsAt {
+                // Which window this is: limits roll from their own start, not the calendar week
+                let start = reset.addingTimeInterval(-window.spanSeconds)
+                TipRow(label: L("Window"), value: "\(LimitsCard.resetFormatter(start)) → \(LimitsCard.resetFormatter(reset))")
+            }
             if let elapsed = window.elapsedFraction() {
                 TipRow(label: L("Window elapsed"), value: String(format: "%.0f%%", elapsed * 100))
             }
-            if let projected = window.projectedPercent() {
-                TipRow(label: L("At this pace, by reset"), value: String(format: "≈ %.0f%%", projected))
+            if let projected = projected ?? window.projectedPercent() {
+                TipRow(label: L("Expected by reset"), value: String(format: "≈ %.0f%%", projected))
             }
             if let reset = window.resetsAt {
                 Divider().overlay(Palette.hairline)

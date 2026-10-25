@@ -22,7 +22,30 @@ public final class LimitsStore {
     /// For older callers: the Claude snapshot
     public var limits: ProviderLimits? { claude }
 
+    /// Claude Code's half-hour usage for forecasts that follow how you work (set by the app); nil when it is stale
+    public var usageHistory: (@MainActor () -> IntradayScanner.Snapshot?)?
+
+    /// Where a window is heading by its reset (%): for Claude from your usual half-hours (`LimitForecast`), otherwise,
+    /// or without fresh history, in a straight line once 5% of the window has passed
+    public func projectedPercent(_ w: LimitWindow, provider: LimitProvider, now: Date = Date()) -> Double? {
+        if provider == .claude, let history = usageHistory?(),
+           let projected = LimitForecast.projectedPercent(w, snapshot: history, models: Self.counts(w), now: now) {
+            return projected
+        }
+        return w.projectedPercent(now: now)
+    }
+
+    /// Which Claude Code models spend a window: Fable's only its own, the others every model
+    nonisolated static func counts(_ w: LimitWindow) -> @Sendable (String) -> Bool {
+        if w.kind == .fable { return { model in model.lowercased().contains("fable") } }
+        return { _ in true }
+    }
+
     private var organizationIdCache: String?
+    /// The organization list (and with it claude.ai's plan) is fetched again hourly
+    private var organizationFetchedAt: Date?
+    /// The plan claude.ai reports; preferred over the keychain's, which keeps an old plan until Claude Code signs in again
+    private var webPlanLabel = ""
     private var claudePlanLabel = ""
     /// The plan can change while the app runs (a new subscription); the label is read again at most hourly
     private var planLabelLoadedAt: Date?
@@ -103,7 +126,7 @@ public final class LimitsStore {
             )
             guard !label.isEmpty else { continue }
             claudePlanLabel = label
-            if var current = claude {
+            if webPlanLabel.isEmpty, var current = claude {
                 current.accountLabel = label
                 claude = current
             }
@@ -112,7 +135,7 @@ public final class LimitsStore {
     }
 
     /// Ported from claudePlanLabelFromParts: max + *_20x → "Max 20x"; otherwise the capitalised subscription name
-    static func planLabel(subscriptionType: String?, rateLimitTier: String?) -> String {
+    nonisolated static func planLabel(subscriptionType: String?, rateLimitTier: String?) -> String {
         let sub = (subscriptionType ?? "").trimmingCharacters(in: .whitespaces).lowercased()
         let tierWords = (rateLimitTier ?? "")
             .split(whereSeparator: { "_- ".contains($0) })
@@ -139,7 +162,12 @@ public final class LimitsStore {
         claudeStatus = .probing
         do {
             let probe = try ClaudeWebProbe(cookie: cookie)
-            let (result, orgId) = try await probe.probe(cachedOrganizationId: organizationIdCache)
+            let cachedOrg = Date().timeIntervalSince(organizationFetchedAt ?? .distantPast) < 3600 ? organizationIdCache : nil
+            let (result, orgId) = try await probe.probe(cachedOrganizationId: cachedOrg)
+            if cachedOrg == nil {
+                organizationFetchedAt = Date()
+                webPlanLabel = result.planLabel ?? ""
+            }
             organizationIdCache = orgId
             if let renewed = result.renewedSessionKey {
                 var file = CredentialStore.load()
@@ -148,7 +176,7 @@ public final class LimitsStore {
             }
             if Date().timeIntervalSince(planLabelLoadedAt ?? .distantPast) > 3600 { await loadClaudePlanLabel() }
             var limits = result.limits
-            limits.accountLabel = claudePlanLabel
+            limits.accountLabel = webPlanLabel.isEmpty ? claudePlanLabel : webPlanLabel
             claude = limits
             claudeStatus = .ok
             failures[.claude] = 0
