@@ -173,6 +173,14 @@ public extension Color {
         return Color(hue: h, saturation: max(0.05, s - 0.035), brightness: min(1, b + 0.055))
     }
 
+    /// Ink for a mark drawn on this colour: black on light fills (the white / grey tool colours), white otherwise
+    var contrastingInk: Color {
+        guard let c = NSColor(self).usingColorSpace(.sRGB) else { return .white }
+        func linear(_ x: CGFloat) -> CGFloat { x <= 0.04045 ? x / 12.92 : pow((x + 0.055) / 1.055, 2.4) }
+        let luminance = 0.2126 * linear(c.redComponent) + 0.7152 * linear(c.greenComponent) + 0.0722 * linear(c.blueComponent)
+        return luminance > 0.45 ? .black.opacity(0.85) : .white
+    }
+
     /// Top-to-bottom fill for a bar or area in this hue: a touch lighter at the top
     var fill: LinearGradient {
         LinearGradient(colors: [lit, self], startPoint: .top, endPoint: .bottom)

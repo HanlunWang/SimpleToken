@@ -144,6 +144,17 @@
         }
       }
     },
+    "%@ resets": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@重置"
+          }
+        }
+      }
+    },
     "%@ settings": {
       "extractionState": "manual",
       "localizations": {
@@ -589,28 +600,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "%lld 周"
-          }
-        }
-      }
-    },
-    "%lld%% ahead": {
-      "extractionState": "manual",
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "快 %lld%%"
-          }
-        }
-      }
-    },
-    "%lld%% behind": {
-      "extractionState": "manual",
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "慢 %lld%%"
           }
         }
       }
@@ -1814,17 +1803,6 @@
         }
       }
     },
-    "Even pace": {
-      "extractionState": "manual",
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "相对匀速"
-          }
-        }
-      }
-    },
     "Even-pace line": {
       "extractionState": "manual",
       "localizations": {
@@ -2884,17 +2862,6 @@
         }
       }
     },
-    "Next reset": {
-      "extractionState": "manual",
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "下次重置"
-          }
-        }
-      }
-    },
     "No messages in range": {
       "extractionState": "manual",
       "localizations": {
@@ -3122,17 +3089,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "数字显示"
-          }
-        }
-      }
-    },
-    "On pace": {
-      "extractionState": "manual",
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "持平"
           }
         }
       }
@@ -4926,17 +4882,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "窗口已过去"
-          }
-        }
-      }
-    },
-    "Windows": {
-      "extractionState": "manual",
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "窗口数"
           }
         }
       }

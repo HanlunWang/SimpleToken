@@ -110,7 +110,7 @@ public struct EntityMark: View {
     }
 }
 
-/// Provider badge: rounded square in the brand colour + white logo (a text glyph when there is no logo)
+/// Provider badge: rounded square in the brand colour + a logo in contrasting ink (a text glyph when there is no logo)
 public struct BrandBadge: View {
     let logo: String?
     let fallback: String
@@ -128,9 +128,9 @@ public struct BrandBadge: View {
         ZStack {
             RoundedRectangle(cornerRadius: size * 0.28).fill(color)
             if let logo, BrandLogos.image(logo) != nil {
-                BrandLogo(logo, size: size * 0.66).foregroundStyle(.white)
+                BrandLogo(logo, size: size * 0.66).foregroundStyle(color.contrastingInk)
             } else {
-                Text(fallback).font(.system(size: size * 0.6, weight: .bold)).foregroundStyle(.white)
+                Text(fallback).font(.system(size: size * 0.6, weight: .bold)).foregroundStyle(color.contrastingInk)
             }
         }
         .frame(width: size, height: size)

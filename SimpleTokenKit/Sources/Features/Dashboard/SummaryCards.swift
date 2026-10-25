@@ -297,8 +297,7 @@ struct LimitsCard: View {
                         ForEach(rest) { row($0) }
                     }
                 }
-                planStrip
-                FactsRow(facts)
+                providerStrip
             }
         }
         .glassCard(padding: WidgetStyle.padding)
@@ -335,32 +334,34 @@ struct LimitsCard: View {
         }
     }
 
-    /// Every provider's plan beside its logo (the 2×2 card: three plans do not fit one facts column)
-    private var planStrip: some View {
-        FlowLayout(spacing: 12, lineSpacing: 4) {
-            ForEach(shown.filter { !($0.snapshot?.accountLabel ?? "").isEmpty }, id: \.provider) { item in
-                HStack(spacing: 5) {
-                    BrandBadge(logo: BrandLogos.provider(item.provider.rawValue), color: accent(item.provider), size: 14)
-                    Text(item.snapshot?.accountLabel ?? "").font(.system(size: Typo.small, design: .monospaced))
-                        .foregroundStyle(.secondary).lineLimit(1)
+    /// One line per provider: its mark and plan (the provider's name when the plan is unknown), then which of its
+    /// windows resets next and when. The dials give the countdowns; this names the window behind each clock time.
+    private var providerStrip: some View {
+        let now = Date()
+        let lines = shown.compactMap { item -> (provider: LimitProvider, plan: String, next: LimitWindow?)? in
+            guard let snapshot = item.snapshot else { return nil }
+            let next = snapshot.windows.filter { ($0.resetsAt ?? .distantPast) > now }.min { $0.resetsAt! < $1.resetsAt! }
+            let plan = snapshot.accountLabel.isEmpty ? item.provider.displayName : snapshot.accountLabel
+            return (item.provider, plan, next)
+        }
+        return VStack(spacing: 3) {
+            ForEach(lines, id: \.provider) { line in
+                HStack(spacing: 6) {
+                    EntityMark(logo: BrandLogos.provider(line.provider.rawValue), color: accent(line.provider), size: 12)
+                    Text(line.plan).font(.system(size: Typo.small, design: .monospaced))
+                        .foregroundStyle(.secondary).lineLimit(1).truncationMode(.tail)
+                    Spacer(minLength: 8)
+                    if let w = line.next, let reset = w.resetsAt {
+                        Text(L("\(Self.label(w)) resets")).font(.app(Typo.small)).foregroundStyle(.tertiary).lineLimit(1)
+                        Text(Self.resetFormatter(reset)).font(.num(Typo.small, .semibold)).foregroundStyle(.primary)
+                    }
                 }
+                .monospacedDigit()
+                .frame(height: 16)
             }
         }
-    }
-
-    /// The next reset and how the main window compares with even use (plans have their own strip)
-    private var facts: [(String, String)] {
-        let windows = windows(models: false)
-        let now = Date()
-        var out: [(String, String)] = []
-        let next = windows.compactMap(\.window.resetsAt).filter { $0 > now }.min()
-        out.append((L("Next reset"), next.map(Self.resetFormatter) ?? "—"))
-        if let main = windows.first?.window, let elapsed = main.elapsedFraction(now: now) {
-            let points = Int(((main.usedPercent / 100 - elapsed) * 100).rounded())
-            out.append((L("Even pace"), points > 0 ? L("\(points)% ahead") : points < 0 ? L("\(-points)% behind") : L("On pace")))
-        }
-        out.append((L("Windows"), String(windows.count)))
-        return out
+        .padding(.top, 6)
+        .overlay(alignment: .top) { Rectangle().fill(Palette.hairline).frame(height: 1) }
     }
 
     // MARK: Hover

@@ -24,6 +24,8 @@ public final class LimitsStore {
 
     private var organizationIdCache: String?
     private var claudePlanLabel = ""
+    /// The plan can change while the app runs (a new subscription); the label is read again at most hourly
+    private var planLabelLoadedAt: Date?
     private var tasks: [Task<Void, Never>] = []
     private var failures: [LimitProvider: Int] = [:]
 
@@ -82,22 +84,30 @@ public final class LimitsStore {
 
     // MARK: - Claude
 
-    /// The keychain item has no token, but the subscriptionType / rateLimitTier metadata is still there — read only those
+    /// The keychain item has no token, but the subscriptionType / rateLimitTier metadata is still there — read only those.
+    /// Claude Code files the item under the user's account name; other items with the same service (another login, an
+    /// older install) may come first, so ask for this user's item before taking whichever matches.
     private func loadClaudePlanLabel() async {
-        guard let out = try? await ProcessRunner.run(
-            URL(fileURLWithPath: "/usr/bin/security"),
-            arguments: ["find-generic-password", "-s", "Claude Code-credentials", "-w"],
-            timeout: 5
-        ), out.exitCode == 0 else { return }
-        guard let root = try? JSONSerialization.jsonObject(with: out.stdout) as? [String: Any] else { return }
-        let oauth = (root["claudeAiOauth"] as? [String: Any]) ?? root
-        claudePlanLabel = Self.planLabel(
-            subscriptionType: oauth["subscriptionType"] as? String,
-            rateLimitTier: oauth["rateLimitTier"] as? String
-        )
-        if var current = claude, current.accountLabel.isEmpty {
-            current.accountLabel = claudePlanLabel
-            claude = current
+        planLabelLoadedAt = Date()
+        for account in [["-a", NSUserName()], []] {
+            guard let out = try? await ProcessRunner.run(
+                URL(fileURLWithPath: "/usr/bin/security"),
+                arguments: ["find-generic-password", "-s", "Claude Code-credentials"] + account + ["-w"],
+                timeout: 5
+            ), out.exitCode == 0,
+                let root = try? JSONSerialization.jsonObject(with: out.stdout) as? [String: Any] else { continue }
+            let oauth = (root["claudeAiOauth"] as? [String: Any]) ?? root
+            let label = Self.planLabel(
+                subscriptionType: oauth["subscriptionType"] as? String,
+                rateLimitTier: oauth["rateLimitTier"] as? String
+            )
+            guard !label.isEmpty else { continue }
+            claudePlanLabel = label
+            if var current = claude {
+                current.accountLabel = label
+                claude = current
+            }
+            return
         }
     }
 
@@ -136,6 +146,7 @@ public final class LimitsStore {
                 file.claudeWebCookie = renewed
                 CredentialStore.save(file)
             }
+            if Date().timeIntervalSince(planLabelLoadedAt ?? .distantPast) > 3600 { await loadClaudePlanLabel() }
             var limits = result.limits
             limits.accountLabel = claudePlanLabel
             claude = limits
