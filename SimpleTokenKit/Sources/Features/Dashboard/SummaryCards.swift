@@ -21,8 +21,10 @@ private struct LimitReadout {
     let fraction: Double
     /// Even-pace marker (elapsed share of the window), nil when hidden
     let pace: Double?
-    /// Where the window is heading by its reset (0…1); nil without a forecast or in Left mode
+    /// Where the window is heading by its reset (0…1, the dial stops at full); nil without a forecast or in Left mode
     let projected: Double?
+    /// The forecast as a number, past 100% when the window is heading over its limit
+    let projectedText: String?
     let percentText: String
     let tint: Color
 
@@ -34,11 +36,13 @@ private struct LimitReadout {
             fraction = used
             pace = showPace ? elapsed : nil
             projected = projectedPercent.map { min(1, $0 / 100) }
+            projectedText = projectedPercent.map { "→ \(Int($0.rounded()))%" }
             percentText = "\(Int((used * 100).rounded()))%"
         } else {
             fraction = 1 - used
             pace = showPace ? elapsed.map { 1 - $0 } : nil
             projected = nil
+            projectedText = nil
             percentText = "\(Int(w.remainingPercent.rounded()))%"
         }
     }
@@ -325,8 +329,8 @@ struct LimitsCard: View {
                     EntityMark(logo: BrandLogos.provider(provider.rawValue), color: colors.toolColor(provider.rawValue), size: 11)
                     Text(Self.label(w)).font(.app(Typo.small, .medium)).foregroundStyle(.secondary)
                         .lineLimit(1).truncationMode(.middle)
-                    if let projected = r.projected {
-                        Text("→ \(Int((projected * 100).rounded()))%").font(.num(Typo.small, .medium)).foregroundStyle(.tertiary)
+                    if let projected = r.projectedText {
+                        Text(projected).font(.num(Typo.small, .medium)).foregroundStyle(.tertiary)
                     }
                 }
                 Text(w.resetsAt.map { reset in

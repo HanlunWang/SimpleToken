@@ -1,9 +1,9 @@
 import Foundation
 
-/// Where a Claude limit window is heading by its reset, from how you usually work rather than a straight line.
+/// Where a Claude limit window is heading by its reset in its first minutes or hours, before a straight line from
+/// the pace so far means anything (`LimitsStore.projectedPercent` switches to the line after 5% of the window).
 /// The share of the limit one Claude Code token costs is read from this window (used % ÷ tokens since it opened);
-/// the tokens still to come are the average of the same half-hours over the past two weeks. Early in a window,
-/// where a straight line from a few hours explodes, this already gives a usable number.
+/// the tokens still to come are the average of the same half-hours over the past two weeks.
 public enum LimitForecast {
     /// Days of history the half-hour profile averages over
     static let profileDays = 14

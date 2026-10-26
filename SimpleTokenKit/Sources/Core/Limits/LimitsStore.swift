@@ -25,14 +25,13 @@ public final class LimitsStore {
     /// Claude Code's half-hour usage for forecasts that follow how you work (set by the app); nil when it is stale
     public var usageHistory: (@MainActor () -> IntradayScanner.Snapshot?)?
 
-    /// Where a window is heading by its reset (%): for Claude from your usual half-hours (`LimitForecast`), otherwise,
-    /// or without fresh history, in a straight line once 5% of the window has passed
+    /// Where a window is heading by its reset (%): in a straight line at the pace so far once 5% of the window has
+    /// passed; before that, where a line from a few minutes says little, a Claude window goes by your usual half-hours
+    /// (`LimitForecast`) when fresh history is there
     public func projectedPercent(_ w: LimitWindow, provider: LimitProvider, now: Date = Date()) -> Double? {
-        if provider == .claude, let history = usageHistory?(),
-           let projected = LimitForecast.projectedPercent(w, snapshot: history, models: Self.counts(w), now: now) {
-            return projected
-        }
-        return w.projectedPercent(now: now)
+        if let line = w.projectedPercent(now: now) { return line }
+        guard provider == .claude, let history = usageHistory?() else { return nil }
+        return LimitForecast.projectedPercent(w, snapshot: history, models: Self.counts(w), now: now)
     }
 
     /// Which Claude Code models spend a window: Fable's only its own, the others every model
