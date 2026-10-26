@@ -25,8 +25,8 @@ targets:
       properties:
         CFBundleName: SimpleToken
         CFBundleDisplayName: SimpleToken
-        CFBundleShortVersionString: "0.1.5"
-        CFBundleVersion: "6"
+        CFBundleShortVersionString: "0.1.6"
+        CFBundleVersion: "7"
         LSUIElement: true
         LSMinimumSystemVersion: "26.0"
         NSHumanReadableCopyright: "Copyright © 2026 Hanlun Wang. MIT License."
