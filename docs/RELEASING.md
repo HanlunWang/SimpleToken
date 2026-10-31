@@ -23,7 +23,7 @@ Developer ID certificates expire. After renewing one, export it again and re-run
 
 1. Set the version in `project.yml` (`CFBundleShortVersionString`, and raise `CFBundleVersion`).
 2. Write the release notes in `docs/releases/X.Y.Z.md` (without one, GitHub generates notes from the commits).
-3. Commit and push to `main`, then tag and push the tag:
+3. Open a PR with those changes (`main` takes no direct pushes). Once it is merged, update `main`, then tag and push the tag:
 
    ```bash
    git tag vX.Y.Z
