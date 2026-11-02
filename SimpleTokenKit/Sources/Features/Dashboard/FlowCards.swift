@@ -103,7 +103,9 @@ struct MapCard: View {
             let rects = MapLayout.rects(runs: runs, values: values, in: CGRect(origin: .zero, size: geo.size))
             MapCanvas(values: AnimatableVector(values), reveal: entrance.amount, tiles: tiles, runs: runs,
                       hovered: tiles.firstIndex { $0.id == hovered }, exact: exact)
-                .animation(Motion.data, value: values)
+                // Morph when the range or the set of models changes. Live ticks only nudge the numbers: the tiles
+                // settle at once rather than re-measuring every label on every frame of a 0.6 s morph each tick
+                .animation(Motion.data, value: "\(report.range.rawValue)|\(tiles.map(\.id).joined(separator: ","))")
                 .animation(Motion.hover, value: hovered)
                 .contentShape(Rectangle())
                 .onContinuousHover(coordinateSpace: .local) { phase in
