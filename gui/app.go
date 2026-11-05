@@ -619,11 +619,7 @@ func (a *ctrl) menuBarSegs() []mbSeg {
 				segs = append(segs, mbSeg{Label: label, Value: format.MenuBarCountdown(w.ResetsAt.Sub(now)), Pct: -1})
 			}
 		case "today.hours":
-			bars := make([]float64, 24)
-			for i, v := range m.todayHalf() {
-				bars[min(23, i/2)] += v
-			}
-			segs = append(segs, mbSeg{Bars: bars, Now: now.Hour(), Pct: -1})
+			segs = append(segs, todayHours(m.todayHalf(), now))
 		case "week.days":
 			days := m.days(7)
 			bars := make([]float64, len(days))
@@ -649,7 +645,20 @@ func (a *ctrl) menuBarSegs() []mbSeg {
 			segs = append(segs, seg)
 		}
 	}
+	// The bars style leads with today's hours even when they are not one of the chosen items.
+	if mbStyle(m.s.MenuBarStyle) == mbBars && !slices.ContainsFunc(segs, func(s mbSeg) bool { return len(s.Bars) > 0 }) {
+		segs = append([]mbSeg{todayHours(m.todayHalf(), now)}, segs...)
+	}
 	return segs
+}
+
+// todayHours folds today's half hours into 24 hourly bars for the menu bar.
+func todayHours(half []float64, now time.Time) mbSeg {
+	bars := make([]float64, 24)
+	for i, v := range half {
+		bars[min(23, i/2)] += v
+	}
+	return mbSeg{Bars: bars, Now: now.Hour(), Pct: -1}
 }
 
 func (a *ctrl) window(p limits.Provider, k limits.Kind) (limits.Window, bool) {

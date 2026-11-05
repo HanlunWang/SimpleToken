@@ -62,7 +62,11 @@ func TestReadmeImages(t *testing.T) {
 	for i, st := range styles {
 		for j, dark := range []bool{true, false} {
 			o := mbOpts{Style: st, Pace: true, Icon: true, Red: true, Dark: dark}
-			data, tmpl := renderMenuBar(demoSegs()["today"], o)
+			segs := demoSegs()["today"]
+			if st == mbBars {
+				segs = append(demoSegs()["hours"][:1], segs...)
+			}
+			data, tmpl := renderMenuBar(segs, o)
 			img, err := png.Decode(bytes.NewReader(data))
 			if err != nil {
 				t.Fatal(err)

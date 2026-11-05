@@ -23,13 +23,13 @@ Claude Code and Codex are billed by plan limits that reset every few hours and e
 
 - **Native and light.** Written in Go on [mygo](https://github.com/egoist/mygo)'s native UI, with no web view: under 40 MB of memory in the menu bar, under 100 MB with the window open, and near-zero CPU when idle. Nothing is drawn while nothing is visible.
 - **Private by design.** Usage is computed from local logs. The only network request is the plan-limit check against claude.ai, using a cookie you provide.
-- **Yours to arrange.** Every chart is a widget you can drag, resize and configure, in a dark or light theme with six palettes.
+- **Yours to arrange.** Every chart is a widget you can drag, resize and configure, in three palettes (Graphite, Paper, Ice), each dark and light, following the system appearance.
 
 ## Features
 
 ### A dashboard of widgets
 
-Every chart and stat is a widget in one of four sizes: small (1×1), medium (2×1), large (2×2) or wide (4×2). Each size has its own layout, from a single number with a sparkline to a full chart with a row of key facts. The grid adds columns as the window gets wider while widgets keep roughly the same size. Drag a widget to move it, right-click to resize it, or flip it over to change its options and colour.
+Every chart and stat is a widget in one of four sizes: small (1×1), medium (2×1), large (2×2) or wide (4×1). Each size has its own layout, from a single number with a sparkline to a full chart with a row of key facts. The grid adds columns as the window gets wider while widgets keep roughly the same size. In edit mode, drag a widget by its grip, pick its size, remove it or add one from the widget drawer; flip a widget over to change its options and accent colour.
 
 <p align="center">
   <img src="docs/images/dashboard-light.png" width="900" alt="The dashboard in the light theme">
@@ -40,7 +40,7 @@ Widgets include:
 | Widget | What it shows |
 | --- | --- |
 | Main chart | Cumulative usage for the selected range against the previous period (or the same period last year) |
-| Limits | Claude session, weekly and model windows, Codex windows, the Cursor / Grok Bot weekly window, pace markers and a projection to the reset |
+| Limits | Claude session, weekly and model windows, Codex windows, the Cursor / Grok Bot weekly window, each a tick gauge with the time gone and where usage lands by the reset |
 | Models | Share by model with vendor colours and logos, daily trends and cost per million tokens |
 | Usage map | A treemap of your models, grouped by vendor and sized by usage |
 | Flow | A flow diagram from tools to the models they used |
@@ -52,11 +52,11 @@ Widgets include:
 | This month's cost | Month-to-date cost at list prices, a month-end projection and last month for reference |
 | Stats | Eight single-number widgets: daily average, peak day, active days, cost per million tokens, total cost, messages, top model and busiest weekday |
 
-Charts are drawn with a shared kit of thin marks and dot-matrix numbers that animate when you switch the range or metric. Series are an ink ladder ranked by the last 30 days, with vendor logos beside the names; switch to vendor colours (Anthropic terracotta, OpenAI teal, Google indigo) in Settings → Appearance. Hover over any of them for details: a day's model and tool breakdown, a half-hour slot, a calendar day ranked against the rest, a punchcard cell with its model mix, or a tool's share of a model. Time ranges run from 1D to ALL.
+Charts are drawn with a shared kit of thin marks that animate when you switch the range or metric; nothing moves at idle. Colour follows the model family (Opus and Sonnet clay, GPT and Codex slate, Gemini violet, Haiku rose), and every model name carries its vendor's logo in that colour; switch to a neutral ink ladder in Settings → Appearance. Hover over any of them for details: a day's model and tool breakdown, a half-hour slot, a calendar day ranked against the rest, a punchcard cell with its model mix, or a tool's share of a model. Time ranges run from Today to All.
 
 ### Menu bar
 
-Show any mix of Claude, Codex and Cursor limits, today's tokens or cost, this month's cost, the session reset countdown, and small charts of today by hour and the last seven days. Six styles fit them into the menu bar: one line, two lines, compact (two rows), rings, nested rings in the spirit of Activity, and progress bars. Rings and bars mark where even use would be by now. Values turn red near the limit.
+Show any mix of Claude, Codex and Cursor limits, today's tokens or cost, this month's cost, the session reset countdown, and small charts of today by hour and the last seven days. Three styles fit up to three of them into the menu bar: a tick gauge, plain numbers, or today's hours as bars. The item is a template image that follows the menu bar, and turns red when a limit passes your alert threshold.
 
 <p align="center">
   <img src="docs/images/menubar.png" width="840" alt="Menu bar styles on a dark and a light menu bar">
