@@ -47,10 +47,10 @@ func TestWindowRenders(t *testing.T) {
 	for _, theme := range []string{"dark", "light"} {
 		a := newDemoCtrl(t)
 		a.m.s.Theme = theme
-		tt := ui.NewTester(a.windowView, 1180, 2700)
+		tt := ui.NewTester(a.windowView, 1440, 3200)
 		tt.Frame()
 		tt.Frame()
-		for _, want := range []string{"MAIN CHART", "LIMITS", "MODELS", "USAGE MAP", "FLOW", "CALENDAR", "TIME OF DAY", "TOOLS", "TOKEN BREAKDOWN", "THIS MONTH'S COST"} {
+		for _, want := range []string{"TOKENS", "LIMITS", "MODELS", "USAGE MAP", "FLOW", "DAILY USAGE", "CALENDAR", "TIME OF DAY", "TOOLS", "TOKEN BREAKDOWN", "THIS MONTH'S COST"} {
 			if !tt.HasText(want) {
 				t.Errorf("%s: missing %q", theme, want)
 			}
@@ -91,10 +91,10 @@ func TestSettingsRender(t *testing.T) {
 func TestTodayAndNarrowRender(t *testing.T) {
 	a := newDemoCtrl(t)
 	a.m.s.Range = "1D"
-	tt := ui.NewTester(a.windowView, 1180, 2700)
+	tt := ui.NewTester(a.windowView, 1440, 3200)
 	tt.Frame()
 	tt.Frame()
-	if !tt.HasText("USAGE CHART") {
+	if !tt.HasText("DAILY USAGE") {
 		t.Fatalf("missing the usage chart: %q", tt.Texts())
 	}
 	shot(t, tt, "window-today")

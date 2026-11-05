@@ -470,3 +470,16 @@ func WeekdayIndex(t time.Time) int { return (int(t.Local().Weekday()) + 6) % 7 }
 
 // Weekday is the short English weekday name of a date.
 func Weekday(t time.Time) string { return WeekdaysFromMonday[WeekdayIndex(t)] }
+
+// ResetTime is when a limit resets, as close as it needs to be: "15:50" today, "Sun 10:00" within the week,
+// "Nov 1 10:00" later (English, as ShortDate).
+func ResetTime(t, now time.Time) string {
+	t, now = t.Local(), now.Local()
+	if DayKey(t) == DayKey(now) {
+		return Clock(t)
+	}
+	if d := t.Sub(now); d > 0 && d < 6*24*time.Hour {
+		return Weekday(t) + " " + Clock(t)
+	}
+	return t.Format("Jan 2") + " " + Clock(t)
+}

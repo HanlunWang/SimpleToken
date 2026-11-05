@@ -2,6 +2,7 @@ package gui
 
 import (
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/egoist/mygo/ui"
@@ -25,13 +26,14 @@ type winState struct {
 	calOpen       bool
 	calDate       time.Time
 	winW          float32
+	search        string // the widget drawer's search
 	bitmaps       map[string]*ui.Bitmap
 }
 
-// narrow is a window too small for the top bar's range picker (it moves to a row of its own).
-func (w *winState) narrow() bool { return w.winW > 0 && w.winW < 760 }
+// narrow is a window too small for the top bar's pickers (they move to a row of their own).
+func (w *winState) narrow() bool { return w.winW > 0 && w.winW < 860 }
 
-// bitmap decodes a PNG once per window (menu bar previews redraw every frame).
+// bitmap decodes a PNG once per window (menu bar previews redraw every frame); at most 32 are kept.
 func (w *winState) bitmap(png []byte) (*ui.Bitmap, error) {
 	if w.bitmaps == nil || len(w.bitmaps) > 32 {
 		w.bitmaps = map[string]*ui.Bitmap{}
@@ -48,10 +50,12 @@ func (w *winState) bitmap(png []byte) (*ui.Bitmap, error) {
 
 func newWinState() *winState { return &winState{tab: "general", focus: map[string]string{}} }
 
+// The grid (designs/simpletoken-v3 Widgets board): rows of 184, 12 apart; columns of at least 290, so a 1440 window
+// holds four.
 const (
-	cellH   = 168
+	cellH   = 184
 	cellGap = 12
-	minColW = 200
+	minColW = 290
 )
 
 // windowView is the main window: a top bar over the dashboard or the settings page.
@@ -71,14 +75,20 @@ func (a *ctrl) windowView(c *ui.Context) {
 			w.settings = false
 		}
 	}
+	if w.editing && c.Shortcut(0, ui.KeyEnter) {
+		w.editing, w.flipped = false, ""
+	}
 	root := ui.Column(c.Key("root")).Fill().Background(p.BG)
 	if b := root.Bounds(); b.W > 0 {
 		w.winW = b.W
 	}
 	root.Children(func() {
 		a.topBar(c, p)
-		if !w.settings && w.narrow() {
-			ui.Row(c.Key("range2")).FillWidth().Padding(8, 12).Justify(ui.Center).Shrink(0).Children(func() { a.rangePicker(c, p) })
+		if !w.settings && !w.editing && w.narrow() {
+			ui.Row(c.Key("pickers")).FillWidth().Padding(8, 16).Gap(10).Justify(ui.Center).Shrink(0).Children(func() {
+				a.rangePicker(c, p)
+				a.metricPicker(c, p)
+			})
 		}
 		if w.settings {
 			ui.Column(c.Key("settings")).Grow(1).FillWidth().MinHeight(0).
@@ -88,7 +98,7 @@ func (a *ctrl) windowView(c *ui.Context) {
 		}
 		ui.Row(c.Key("dash")).Grow(1).FillWidth().MinHeight(0).Children(func() {
 			ui.Scroll(c.Key("scroll")).Grow(1).FillHeight().Children(func() {
-				ui.Column(c.Key("pad")).FillWidth().Padding(16, 18, 20).Children(func() {
+				ui.Column(c.Key("pad")).FillWidth().Padding(18, 20, 28).Children(func() {
 					a.dashboard(c, p)
 					a.footer(c, p)
 				})
@@ -102,60 +112,96 @@ func (a *ctrl) windowView(c *ui.Context) {
 
 func (a *ctrl) topBar(c *ui.Context, p palette) {
 	m, w := a.m, a.w
-	bar := ui.Row(c.Key("top")).FillWidth().Height(46).Padding(0, 12, 0, 84).Gap(8).AlignItems(ui.Center).Shrink(0).DragWindow()
-	bar.Background(alpha(p.BG, 0.94))
+	bar := ui.Row(c.Key("top")).FillWidth().Height(52).Padding(0, 16, 0, 84).Gap(14).AlignItems(ui.Center).Shrink(0).DragWindow()
+	bar.Background(p.BG)
 	bar.Children(func() {
 		ui.Box(c).Absolute().Left(0).Bottom(0).FillWidth().Height(1).Background(p.L2)
-		p.brand(c, 12.5, m.d.Refreshing && time.Since(w.manualRefresh) < 5*time.Second)
-		p.mono(c, "/", 12, p.T4)
-		usage := ui.Text(c.Key("crumb"), L("usage")).Font(monoFont).FontSize(12).TextColor(pick(w.settings, p.T2, p.T1)).SingleLine()
-		if w.settings && usage.Clicked() {
-			w.settings = false
-		}
 		if w.settings {
-			p.mono(c, "/", 12, p.T4)
-			p.mono(c, L("settings"), 12, p.T1)
-		}
-		ui.Box(c).Grow(1)
-		if w.settings {
-			if p.button(c, "back", L("Back")+" · esc", "arrow-left", btnGhost).Clicked() {
+			if p.button(c, "back", L("Dashboard"), "chevron-left", btnGhost).Clicked() {
 				w.settings = false
 			}
-			return
 		}
-		a.refreshControl(c, p)
-		if !w.narrow() {
-			a.rangePicker(c, p)
+		ui.Row(c.Key("crumbs")).Gap(8).AlignItems(ui.Center).Shrink(0).Children(func() {
+			p.brand(c, 12.5, m.d.Refreshing && time.Since(w.manualRefresh) < 5*time.Second)
+			p.mono(c, "/", 12.5, p.T4)
+			switch {
+			case w.settings:
+				p.mono(c, L("settings"), 12.5, p.T2)
+			case w.editing:
+				p.mono(c, L("edit widgets"), 12.5, p.T2)
+			default:
+				p.mono(c, L("usage"), 12.5, p.T2)
+			}
+		})
+		if w.editing {
+			p.badge(c, L("EDITING"), "sig")
 		}
-		if p.iconBtn(c, "edit", pick(w.editing, "check", "layout-grid"), pick(w.editing, L("Done"), L("Widgets")), w.editing).Clicked() {
-			w.editing = !w.editing
-			w.flipped = ""
-		}
-		if p.iconBtn(c, "settings", "settings-2", L("Settings")+" (⌘,)", false).Clicked() {
-			w.settings = true
+		ui.Box(c).Grow(1)
+		switch {
+		case w.settings:
+		case w.editing:
+			if !w.narrow() {
+				ui.Text(c, L("Drag to reorder · pick a size · flip a card for its options")).FontSize(11).TextColor(p.T3).SingleLine()
+			}
+			if p.button(c, "reset", L("Reset layout"), "", btnGhost).Clicked() {
+				d := settings.Default()
+				m.s.CardOrder, m.s.HiddenCards, m.s.CardSizes = d.CardOrder, d.HiddenCards, d.CardSizes
+				a.saveSettings()
+			}
+			if p.button(c, "done", L("Done")+"  ↩", "", btnPrimary).Clicked() {
+				w.editing, w.flipped = false, ""
+			}
+		default:
+			if !w.narrow() {
+				a.rangePicker(c, p)
+				a.metricPicker(c, p)
+			}
+			ui.Row(c.Key("tools")).Gap(2).AlignItems(ui.Center).Shrink(0).Children(func() {
+				a.refreshControl(c, p)
+				if p.iconBtn(c, "edit", "layout-grid", L("Edit widgets"), false).Clicked() {
+					w.editing, w.flipped = true, ""
+				}
+				if p.iconBtn(c, "settings", "sliders-horizontal", L("Settings")+" ⌘,", false).Clicked() {
+					w.settings = true
+				}
+			})
 		}
 	})
 }
 
-// rangePicker is the 1D … ALL segmented control.
+// rangeChoices are the top bar's ranges (the v3 set); 6M and YTD stay valid values for settings written before.
+var rangeChoices = [][2]string{{"1D", "Today"}, {"1W", "7D"}, {"1M", "30D"}, {"3M", "90D"}, {"1Y", "1Y"}, {"ALL", "All"}}
+
+// rangePicker is the Today … All segmented control.
 func (a *ctrl) rangePicker(c *ui.Context, p palette) {
 	m := a.m
-	ranges := make([]string, len(analytics.Ranges))
-	sel := 0
-	for i, r := range analytics.Ranges {
-		ranges[i] = string(r)
-		if string(r) == m.s.Range {
+	labels := make([]string, len(rangeChoices))
+	sel := -1
+	for i, r := range rangeChoices {
+		labels[i] = L(r[1])
+		if r[0] == m.s.Range {
 			sel = i
 		}
 	}
-	if n := p.segmented(c, "range", sel, ranges...); n != sel {
-		m.s.Range = ranges[n]
+	if n := p.segmented(c, "range", sel, labels...); n != sel && n >= 0 {
+		m.s.Range = rangeChoices[n][0]
 		a.w.usageDay = ""
 		a.saveSettings()
 	}
 }
 
-// refreshControl shows the last update; only a manual refresh animates it (background ticks never do).
+// metricPicker switches the dashboard between tokens and cost.
+func (a *ctrl) metricPicker(c *ui.Context, p palette) {
+	m := a.m
+	v := pick(m.s.Metric == "cost", "cost", "tokens")
+	if p.segValue(c, "metric", &v, [][2]string{{"tokens", L("Tokens")}, {"cost", L("Cost")}}) {
+		m.s.Metric = v
+		a.saveSettings()
+	}
+}
+
+// refreshControl shows the last update beside the refresh button; only a manual refresh animates it (background
+// ticks never do).
 func (a *ctrl) refreshControl(c *ui.Context, p palette) {
 	m := a.m
 	now := m.now()
@@ -164,20 +210,18 @@ func (a *ctrl) refreshControl(c *ui.Context, p palette) {
 		label = L("Not collected yet")
 	}
 	manual := m.d.Refreshing && time.Since(a.w.manualRefresh) < 2*time.Minute
-	if manual {
-		label = L("Refreshing")
+	if !a.w.narrow() {
+		p.mono(c, pick(manual, L("Refreshing"), label), 11, p.T3).Padding(0, 6, 0, 0)
 	}
-	b := ui.Row(c.Key("refresh")).Height(26).Padding(0, 9).Radius(p.rCtl()).Gap(7).AlignItems(ui.Center).Shrink(0).
+	b := ui.Row(c.Key("refresh")).Size(26, 26).Radius(5).AlignItems(ui.Center).Justify(ui.Center).Shrink(0).
 		Label(L("Refresh")).Tooltip(L("Refresh") + " ⌘R · " + L("Today's usage refresh") + " " + fmtr.Seconds(m.s.LiveRefreshSeconds))
 	b.Background(b.AnimateColor("bg", pick(b.Hovered(), p.L2, ui.Transparent), animHover))
+	pressPose(b, 0.92)
 	b.Children(func() {
 		if manual {
 			p.dotRun(c, 10)
 		} else {
-			ui.Box(c).Size(5, 5).Radius(2.5).Background(pick(m.d.Collected, p.Sig, p.L4)).Shadow(0, 0, 5, 0, pick(m.d.Collected, p.glow(), ui.Transparent))
-		}
-		if !a.w.narrow() {
-			p.mono(c, label, 11.5, p.T2)
+			icon(c, "rotate-cw", 14).TextColor(pick(b.Hovered(), p.T1, p.T2))
 		}
 	})
 	if b.Clicked() {
@@ -195,8 +239,6 @@ func (a *ctrl) footer(c *ui.Context, p palette) {
 	}
 	ui.Row(c.Key("footer")).FillWidth().Justify(ui.Center).Gap(10).Padding(18, 0, 0).AlignItems(ui.Center).Children(func() {
 		p.mono(c, L("Data from this Mac"), 10.5, p.T4)
-		p.mono(c, "·", 10.5, p.T4)
-		p.mono(c, L("Drag a widget to move it, right-click to resize"), 10.5, p.T4)
 		if m.d.LegacyMerged {
 			p.mono(c, "·", 10.5, p.T4)
 			p.mono(c, L("Token Monitor history merged"), 10.5, p.T4)
@@ -205,7 +247,7 @@ func (a *ctrl) footer(c *ui.Context, p palette) {
 			p.mono(c, "·", 10.5, p.T4)
 			p.mono(c, L("%lld excluded", n), 10.5, p.T4)
 		}
-		if hidden > 0 {
+		if hidden > 0 && !w.editing {
 			p.mono(c, "·", 10.5, p.T4)
 			t := ui.Text(c.Key("add"), L("Add widgets (%lld hidden)", hidden)).Font(monoFont).FontSize(10.5).TextColor(p.T2).Underline().SingleLine()
 			if t.Clicked() {
@@ -224,7 +266,8 @@ type placed struct {
 	cols, rows int
 }
 
-// pack places cards dense first-fit in a grid of n columns (wide cards fall back to large under 3 columns).
+// pack places cards dense first-fit in a grid of n columns. A wide card (4 × 1) becomes large (2 × 2) below four
+// columns.
 func (a *ctrl) pack(n int) ([]placed, int) {
 	var out []placed
 	occ := map[[2]int]bool{}
@@ -237,8 +280,8 @@ func (a *ctrl) pack(n int) ([]placed, int) {
 			continue
 		}
 		size := a.cardSize(id)
-		if size == sizeW && n < 3 {
-			size = sizeL
+		if size == sizeW && n < 4 {
+			size = pick(slices.Contains(cardDefs[id].Sizes, sizeL), sizeL, sizeM)
 		}
 		cw, ch := size.span()
 		cw = min(cw, n)
@@ -275,7 +318,6 @@ func (a *ctrl) pack(n int) ([]placed, int) {
 
 func columnsFor(w float32) int {
 	n := int((w + cellGap) / (minColW + cellGap))
-	n -= n % 2
 	return max(2, min(8, n))
 }
 
@@ -287,7 +329,7 @@ func (a *ctrl) dashboard(c *ui.Context, p palette) {
 		w.gridW = b.W
 	}
 	if w.gridW == 0 {
-		w.gridW = 1140
+		w.gridW = 1200
 	}
 	n := columnsFor(w.gridW)
 	cells, rows := a.pack(n)
@@ -306,64 +348,95 @@ func (a *ctrl) dashboard(c *ui.Context, p palette) {
 	})
 }
 
+// cardShell is a widget's frame (theme.css .w): the card ground, one hairline, a header with the caption (its
+// square in the card's accent) and a note, and the body 14 below. In edit mode the header holds a grip, the sizes
+// and a remove button, and the card can be dragged onto another to take its place; flipped, it shows its options.
 func (a *ctrl) cardShell(c *ui.Context, p palette, card ui.Element, pl placed, rep analytics.Report) {
 	w := a.w
 	def := cardDefs[pl.id]
+	flipped := w.flipped == pl.id
 	hover := card.Hovered()
 	border := pick(hover, p.L3, p.L2)
 	if w.editing {
+		border = p.L3
 		card.Drag(pl.id)
 		if id, over := ui.DragOver[string](card); over && id != pl.id {
 			border = p.sigLine()
-			card.Shadow(0, 0, 18, 0, p.glowSoft())
+			card.Shadow(0, 0, 14, 0, p.glowSoft())
 		}
 		if id, ok := ui.Drop[string](card); ok && id != pl.id {
 			a.moveCard(id, pl.id)
 		}
 		if card.Dragging() {
-			card.Opacity(0.35)
+			card.Opacity(0.4)
 		}
+	}
+	if flipped {
+		border = p.L4
+		card.Background(p.Elev)
 	}
 	card.Border(1, card.AnimateColor("bd", border, animHover))
 	card.ContextMenu(a.cardMenu(pl))
-	flipped := w.flipped == pl.id
+	acc := a.accent(p, pl.id)
 	card.Children(func() {
-		if w.editing {
-			ui.Box(c).Absolute().Left(-1).Top(-1).Right(-1).Bottom(-1).Radius(p.rCard()).PassThrough().Draw(func(pt *ui.Painter, r ui.Rect) {
-				pt.StrokeDashed(r, p.L4, p.rCard(), 1)
+		ui.Column(c.Key("in")).Fill().Padding(14, 16, 16).Children(func() {
+			ui.Row(c.Key("head")).FillWidth().Height(18).Gap(8).AlignItems(ui.Center).Shrink(0).Children(func() {
+				if w.editing && !flipped {
+					grip(c, p)
+				}
+				p.captionAcc(c, L(def.Title)+pick(flipped, " · "+L("options"), ""), pick(cardAccented(pl.id), acc, p.Sig))
+				ui.Box(c).Grow(1).MinWidth(0)
+				switch {
+				case flipped:
+					if p.button(c, "flip", L("Flip back"), "", btnGhost).Height(24).Clicked() {
+						w.flipped = ""
+					}
+				case w.editing:
+					for _, s := range def.Sizes {
+						if p.chip(c, "size"+string(s), string(s), s == pl.size).Tooltip(sizeName(s)).Clicked() {
+							a.setCardSize(pl.id, s)
+						}
+					}
+					if p.iconBtn(c, "opts", "sliders-horizontal", L("%@ options", L(def.Title)), false).Size(22, 22).Clicked() {
+						w.flipped = pl.id
+					}
+					rm := ui.Row(c.Key("rm")).Size(22, 22).Radius(5).Background(p.L2).AlignItems(ui.Center).Justify(ui.Center).
+						Label(L("Remove %@", L(def.Title))).Tooltip(L("Remove"))
+					rm.Children(func() { icon(c, "x", 12).TextColor(pick(rm.Hovered(), p.T1, p.T2)) })
+					pressPose(rm, 0.92)
+					if rm.Clicked() {
+						a.hideCard(pl.id)
+					}
+				case hover:
+					if note := a.cardNote(pl.id, rep); note != "" {
+						p.note(c, note).MinWidth(0).Ellipsis("…")
+					}
+					if p.iconBtn(c, "opts", "sliders-horizontal", L("%@ options", L(def.Title)), false).Size(22, 22).Clicked() {
+						w.flipped = pl.id
+					}
+				default:
+					if note := a.cardNote(pl.id, rep); note != "" {
+						p.note(c, note).MinWidth(0).Ellipsis("…")
+					}
+				}
 			})
-		}
-		ui.Row(c.Key("head")).FillWidth().Height(34).Padding(0, 8, 0, 12).Gap(8).AlignItems(ui.Center).Shrink(0).Children(func() {
-			p.caption(c, L(def.Title)+pick(flipped, " · "+L("Settings"), ""))
-			if !flipped {
-				p.mono(c, a.cardNote(pl.id, rep), 10.5, p.T4).MinWidth(0).Ellipsis("…")
-			}
-			ui.Box(c).Grow(1)
-			switch {
-			case flipped:
-				if p.iconBtn(c, "hide", "eye-off", L("Hide widget"), false).Clicked() {
-					a.hideCard(pl.id)
-				}
-				if p.button(c, "done", L("Done"), "", btnPrimary).Clicked() {
-					w.flipped = ""
-				}
-			case w.editing:
-				icon(c, "grip-vertical", 14).TextColor(p.T3)
-			case hover:
-				if p.iconBtn(c, "opts", "sliders-horizontal", L("%@ settings", L(def.Title)), false).Clicked() {
-					w.flipped = pl.id
-				}
+			body := ui.Column(c.Key(pick(flipped, "back", "front"))).FillWidth().Grow(1).MinHeight(0).Margin(14, 0, 0)
+			if flipped {
+				body.Transition(ui.ElementTransition{Duration: 260 * time.Millisecond, Enter: &ui.Motion{Scale: 0.97}})
+				body.Children(func() { a.cardBack(c, p, pl) })
+			} else {
+				body.Children(func() { a.cardFront(c, p, pl, rep) })
 			}
 		})
-		body := ui.Column(c.Key(pick(flipped, "back", "front"))).FillWidth().Grow(1).MinHeight(0).Padding(0, 12, 12)
-		if flipped {
-			body.Transition(ui.ElementTransition{Duration: 260 * time.Millisecond, Enter: &ui.Motion{Scale: 0.97}})
-			body.Children(func() { a.cardBack(c, p, pl) })
-		} else {
-			body.Children(func() { a.cardFront(c, p, pl, rep) })
-		}
-		if w.editing && !flipped {
-			a.sizer(c, p, pl)
+	})
+}
+
+// grip is the drag handle: two columns of three dots.
+func grip(c *ui.Context, p palette) {
+	ui.Box(c.Key("grip")).Size(12, 14).Shrink(0).Draw(func(pt *ui.Painter, r ui.Rect) {
+		for i := range 6 {
+			d := ui.Rect{X: r.X + 3 + float32(i%2)*5, Y: r.Y + 2 + float32(i/2)*5, W: 3, H: 3}
+			pt.Fill(d, p.T3, 1.5)
 		}
 	})
 }
@@ -397,24 +470,6 @@ func (a *ctrl) cardFront(c *ui.Context, p palette, pl placed, rep analytics.Repo
 	}
 }
 
-// sizer is the edit-mode size switch in a card's corner.
-func (a *ctrl) sizer(c *ui.Context, p palette, pl placed) {
-	ui.Row(c.Key("sizer")).Absolute().Right(6).Bottom(6).Padding(2).Gap(2).Radius(4).Background(p.Elev).Border(1, p.L3).Children(func() {
-		for _, s := range cardDefs[pl.id].Sizes {
-			cw, ch := s.span()
-			on := s == pl.size
-			b := ui.Row(c.Key(string(s))).Height(18).Padding(0, 5).Radius(2).AlignItems(ui.Center).Background(pick(on, p.L3, ui.Transparent)).Label(sizeName(s))
-			b.Children(func() { p.mono(c, itoa(cw)+"×"+itoa(ch), 9.5, pick(on, p.T1, p.T3)) })
-			if b.Clicked() {
-				a.setCardSize(pl.id, s)
-			}
-		}
-		if p.iconBtn(c, "hide", "eye-off", L("Hide widget"), false).Clicked() {
-			a.hideCard(pl.id)
-		}
-	})
-}
-
 func sizeName(s cardSize) string {
 	switch s {
 	case sizeS:
@@ -424,7 +479,7 @@ func sizeName(s cardSize) string {
 	case sizeL:
 		return L("Large · 2×2")
 	}
-	return L("Wide · 4×2")
+	return L("Wide · 4×1")
 }
 
 func (a *ctrl) cardMenu(pl placed) func(m *ui.Menu) {
@@ -435,6 +490,9 @@ func (a *ctrl) cardMenu(pl placed) func(m *ui.Menu) {
 			}
 		}
 		m.Separator()
+		if m.Item(L("Options…")).Chosen() {
+			a.w.flipped = pl.id
+		}
 		if m.Item(L("Move Earlier")).Chosen() {
 			a.shiftCard(pl.id, -1)
 		}
@@ -463,6 +521,11 @@ func (a *ctrl) hideCard(id string) {
 	a.saveSettings()
 }
 
+func (a *ctrl) showCard(id string) {
+	a.m.s.HiddenCards = slices.DeleteFunc(a.m.s.HiddenCards, func(x string) bool { return x == id })
+	a.saveSettings()
+}
+
 func (a *ctrl) moveCard(id, before string) {
 	o := slices.DeleteFunc(slices.Clone(a.m.s.CardOrder), func(x string) bool { return x == id })
 	i := slices.Index(o, before)
@@ -484,54 +547,114 @@ func (a *ctrl) shiftCard(id string, d int) {
 	a.saveSettings()
 }
 
-// widgetDrawer lists every widget in edit mode: visibility, allowed sizes, reset.
+// widgetDrawer is edit mode's side panel: the hidden widgets to add (searchable), then what is on the dashboard.
 func (a *ctrl) widgetDrawer(c *ui.Context, p palette) {
-	m := a.m
-	ui.Column(c.Key("drawer")).Width(252).FillHeight().Background(p.BG2).Shrink(0).
+	m, w := a.m, a.w
+	var hidden, shown []string
+	for _, id := range m.s.CardOrder {
+		if _, ok := cardDefs[id]; !ok {
+			continue
+		}
+		if slices.Contains(m.s.HiddenCards, id) {
+			hidden = append(hidden, id)
+		} else {
+			shown = append(shown, id)
+		}
+	}
+	q := strings.ToLower(strings.TrimSpace(w.search))
+	match := func(id string) bool { return q == "" || strings.Contains(strings.ToLower(L(cardDefs[id].Title)), q) }
+	ui.Column(c.Key("drawer")).Width(320).FillHeight().Background(p.BG2).Shrink(0).Padding(18, 16).Gap(14).
 		Transition(ui.ElementTransition{Duration: 220 * time.Millisecond, Enter: &ui.Motion{X: 20}, Exit: &ui.Motion{X: 20}}).Children(func() {
 		ui.Box(c).Absolute().Left(0).Top(0).Width(1).FillHeight().Background(p.L2)
-		ui.Row(c.Key("h")).FillWidth().Height(40).Padding(0, 12).AlignItems(ui.Center).Children(func() {
-			p.caption(c, L("Widgets"))
+		ui.Row(c.Key("h")).FillWidth().AlignItems(ui.Center).Children(func() {
+			p.caption(c, L("Add widgets"))
 			ui.Box(c).Grow(1)
-			if p.button(c, "reset", L("Reset to Default"), "", btnGhost).Clicked() {
-				d := settings.Default()
-				m.s.CardOrder, m.s.HiddenCards, m.s.CardSizes = d.CardOrder, d.HiddenCards, d.CardSizes
-				a.saveSettings()
-			}
+			p.mono(c, L("%lld hidden", len(hidden)), 11, p.T4)
+		})
+		ui.Row(c.Key("search")).FillWidth().Height(28).Padding(0, 10).Gap(8).Radius(4).Border(1, p.L3).Background(p.Surf).
+			AlignItems(ui.Center).Children(func() {
+			icon(c, "search", 13).TextColor(p.T3)
+			ui.TextInput(c.Key("q"), &w.search).Placeholder(L("Search widgets")).Grow(1).FontSize(12).Background(ui.Transparent).Border(0, ui.Transparent)
 		})
 		ui.Scroll(c.Key("list")).Grow(1).FillWidth().Children(func() {
-			ui.Column(c).FillWidth().Padding(0, 8, 12).Children(func() {
-				for _, group := range []struct {
-					name string
-					stat bool
-				}{{L("Charts"), false}, {L("Stats"), true}} {
-					p.mono(c, upper(group.name), 10, p.T4).Padding(8, 6, 4)
-					for _, id := range settings.Cards {
-						if cardDefs[id].Stat != group.stat {
-							continue
-						}
-						on := !slices.Contains(m.s.HiddenCards, id)
-						ui.Row(c.Key(id)).FillWidth().Height(32).Padding(0, 6).Gap(8).AlignItems(ui.Center).Children(func() {
-							ui.Text(c, L(cardDefs[id].Title)).FontSize(12).TextColor(pick(on, p.T1, p.T3)).Grow(1).SingleLine()
-							sizes := ""
-							for _, s := range cardDefs[id].Sizes {
-								sizes += string(s) + " "
-							}
-							p.mono(c, sizes, 10, p.T4)
-							v := on
-							if p.toggle(c, "t", &v).Changed() {
-								if v {
-									m.s.HiddenCards = slices.DeleteFunc(m.s.HiddenCards, func(x string) bool { return x == id })
-								} else {
-									m.s.HiddenCards = append(m.s.HiddenCards, id)
-								}
-								a.saveSettings()
-							}
-						})
+			ui.Column(c).FillWidth().Children(func() {
+				p.mono(c, L("HIDDEN"), 10, p.T3).LetterSpacing(0.8).Padding(4, 0, 8)
+				any := false
+				for _, id := range hidden {
+					if !match(id) {
+						continue
 					}
+					any = true
+					def := cardDefs[id]
+					ui.Row(c.Key("h" + id)).FillWidth().Height(46).Gap(10).AlignItems(ui.Center).Children(func() {
+						ui.Box(c).Absolute().Left(0).Top(0).FillWidth().Height(1).Background(p.L2)
+						p.tile(c, "", cardIcon(id), pick(cardAccented(id), a.accent(p, id), p.T2))
+						ui.Column(c).Grow(1).MinWidth(0).Gap(3).Children(func() {
+							ui.Text(c, L(def.Title)).FontSize(12.5).FontWeight(500).TextColor(p.T1).SingleLine()
+							sizes := make([]string, len(def.Sizes))
+							for i, s := range def.Sizes {
+								sizes[i] = string(s)
+							}
+							p.mono(c, strings.Join(sizes, " · "), 10.5, p.T3)
+						})
+						if p.iconBtn(c, "add", "plus", L("Add %@", L(def.Title)), false).Clicked() {
+							a.showCard(id)
+						}
+					})
 				}
-				p.hint(c, L("Drag a widget to move it. Sizes are on each widget, on its back and in the right-click menu.")).Padding(8, 6)
+				if !any {
+					p.hint(c, pick(len(hidden) == 0, L("Every widget is on the dashboard."), L("No widget matches."))).Padding(0, 0, 8)
+				}
+				p.mono(c, L("ON THE DASHBOARD"), 10, p.T3).LetterSpacing(0.8).Padding(18, 0, 8)
+				for _, id := range shown {
+					if !match(id) {
+						continue
+					}
+					ui.Row(c.Key("s" + id)).FillWidth().Height(30).Gap(10).AlignItems(ui.Center).Children(func() {
+						ui.Box(c).Absolute().Left(0).Top(0).FillWidth().Height(1).Background(p.L2)
+						swatch(c, pick(cardAccented(id), a.accent(p, id), p.Ink[1]), 7)
+						ui.Text(c, L(cardDefs[id].Title)).FontSize(12).TextColor(p.T2).Grow(1).SingleLine()
+						p.mono(c, string(a.cardSize(id)), 10.5, p.T3)
+					})
+				}
 			})
 		})
 	})
+}
+
+// cardIcon is a widget's icon in the drawer.
+func cardIcon(id string) string {
+	switch id {
+	case "stat.totalCost", "cost":
+		return "dollar-sign"
+	case "stat.messages":
+		return "message-square"
+	case "stat.topModel":
+		return "trophy"
+	case "stat.weekday", "calendar":
+		return "calendar"
+	case "stat.average", "usage":
+		return "chart-column"
+	case "stat.peak":
+		return "trending-up"
+	case "stat.active":
+		return "grid-3x3"
+	case "stat.perMillion":
+		return "percent"
+	case "limits":
+		return "gauge"
+	case "models":
+		return "boxes"
+	case "map":
+		return "layout-dashboard"
+	case "flow":
+		return "git-merge"
+	case "punchcard":
+		return "clock"
+	case "tools":
+		return "wrench"
+	case "composition":
+		return "layers"
+	}
+	return "chart-line"
 }

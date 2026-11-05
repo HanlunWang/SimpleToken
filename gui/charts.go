@@ -28,7 +28,7 @@ type tipRow struct {
 func (p palette) tooltip(c *ui.Context, x, y, cw float32, title string, rows []tipRow) {
 	const w = 190
 	left := max(4, min(cw-w-4, x+12))
-	ui.Column(c.Key("tip")).Absolute().Left(left).Top(y).Width(w).Padding(7, 9).Gap(3).Radius(5).
+	ui.Column(c.Key("tip")).Absolute().Left(left).Top(y).Width(w).Padding(8, 10).Gap(3).Radius(6).
 		Background(p.Elev).Border(1, p.L3).Shadow(0, 8, 24, 0, ui.RGBA(0, 0, 0, pick(p.Dark, float32(0.45), 0.12))).
 		PassThrough().Children(func() {
 		if title != "" {
@@ -53,9 +53,23 @@ func (p palette) tooltip(c *ui.Context, x, y, cw float32, title string, rows []t
 	})
 }
 
-// axisText draws a mono tick label.
+// axisTextEnd draws a mono label ending at x in col.
+func (p palette) axisTextEnd(pt *ui.Painter, x, y float32, s string, col ui.Color) {
+	sp := ui.Span{Text: s, Font: monoFont, Size: 10, Color: col}
+	w, _ := pt.MeasureText(0, sp)
+	pt.RichText(x-w, y, 0, sp)
+}
+
+// axisTextC draws a mono label centred on x in col.
+func (p palette) axisTextC(pt *ui.Painter, x, y float32, s string, col ui.Color) {
+	sp := ui.Span{Text: s, Font: monoFont, Size: 10, Color: col}
+	w, _ := pt.MeasureText(0, sp)
+	pt.RichText(x-w/2, y, 0, sp)
+}
+
+// axisText draws a mono tick label (anchor 0 start, 1 centre, 2 end).
 func (p palette) axisText(pt *ui.Painter, x, y float32, s string, anchor int) {
-	sp := ui.Span{Text: s, Font: monoFont, Size: 9.5, Color: p.T4}
+	sp := ui.Span{Text: s, Font: monoFont, Size: 10, Color: p.T4}
 	w, _ := pt.MeasureText(0, sp)
 	switch anchor {
 	case 1:
@@ -121,15 +135,43 @@ func niceMax(v float64) float64 {
 type areaOpts struct {
 	Values    []float64 // per bucket (not cumulative)
 	Compare   []float64 // the previous period, per bucket
-	ProjectTo int       // total buckets of the period, for a dashed projection to its end (0: none)
-	Axes      bool
-	Columns   bool
-	Labels    func(i int) string // x labels (start, middle, end)
+	ProjectTo int       // total buckets of the period, for a dotted projection to its end (0: none)
+	Axes      bool      // dashed quarter grid with its tick labels
+	Columns   bool      // faint daily columns under the line
+	Labels    func(i int) string
+	Ticks     int // x labels evenly spread (default 5)
 	Tick      func(v float64) string
-	Color     ui.Color
+	Color     ui.Color // the line (theme.css violet-4 on the hero)
+	Area      ui.Color // fill under the line
+	ColColor  ui.Color // the daily columns
 	Tip       func(i int, cum float64) (string, []tipRow)
 	// Pace draws a dashed straight line from 0 to Pace at the period's end (even pace to a target).
 	Pace float64
+	// NowLabel is written above the live end point ("NOW 15:40"); CompareEnd labels the compare line's end.
+	NowLabel, CompareEnd string
+}
+
+// smoothPath is a Catmull-Rom curve through pts (the design's smooth()), as a path.
+func smoothPath(pts [][2]float32) *ui.Path {
+	var path ui.Path
+	if len(pts) == 0 {
+		return &path
+	}
+	path.MoveTo(pts[0][0], pts[0][1])
+	for i := 0; i < len(pts)-1; i++ {
+		p0, p1, p2, p3 := pts[max(0, i-1)], pts[i], pts[i+1], pts[min(len(pts)-1, i+2)]
+		path.CubeTo(p1[0]+(p2[0]-p0[0])/6, p1[1]+(p2[1]-p0[1])/6, p2[0]-(p3[0]-p1[0])/6, p2[1]-(p3[1]-p1[1])/6, p2[0], p2[1])
+	}
+	return &path
+}
+
+// nowDot is the live end point: a hairline ring around a glowing signal dot. The one thing that glows.
+func (p palette) nowDot(pt *ui.Painter, x, y float32) {
+	ring := ui.Rect{X: x - 8, Y: y - 8, W: 16, H: 16}
+	pt.Stroke(ring, p.sigLine(), 8, 1)
+	dot := ui.Rect{X: x - 3.6, Y: y - 3.6, W: 7.2, H: 7.2}
+	pt.Shadow(dot, 3.6, 0, 0, 8, 0, p.glow())
+	pt.Fill(dot, p.Sig, 3.6)
 }
 
 func (p palette) areaChart(c *ui.Context, key string, o areaOpts) ui.Element {
@@ -154,91 +196,119 @@ func (p palette) areaChart(c *ui.Context, key string, o areaOpts) ui.Element {
 	for _, v := range o.Values {
 		colMax = math.Max(colMax, v)
 	}
-	padR := pick(o.Axes, float32(40), 0)
 	padB := pick(o.Labels != nil, float32(18), 2)
 	grow := box.AnimateTo("grow", 1, animData)
 	b := box.Bounds()
-	X := func(i int, iw float32) float32 {
+	const padX = 8
+	X := func(i int, r ui.Rect) float32 {
 		if n <= 1 {
-			return 0
+			return r.X + padX
 		}
-		return float32(i) / float32(n-1) * iw
+		return r.X + padX + float32(i)/float32(n-1)*(r.W-2*padX)
 	}
 	hover := -1
 	if px, _, over := box.PointerPosition(); over && n > 1 {
-		iw := b.W - padR
-		hover = int(math.Round(float64(px / iw * float32(n-1))))
+		hover = int(math.Round(float64((px - padX) / (b.W - 2*padX) * float32(n-1))))
 		if hover < 0 || hover >= len(o.Values) {
 			hover = -1
 		}
 	}
+	area, colCol := o.Area, o.ColColor
+	if area.A == 0 {
+		area = alpha(o.Color, 0.10)
+	}
+	if colCol.A == 0 {
+		colCol = p.Ink[4]
+	}
 	box.Draw(func(pt *ui.Painter, r ui.Rect) {
-		iw, ih := r.W-padR, r.H-padB-6
-		y0 := r.Y + 6
-		Y := func(v float64) float32 { return y0 + ih - float32(v/maxV)*ih*grow }
+		y0, ih := r.Y+14, r.H-padB-14
+		base := y0 + ih
+		Y := func(v float64) float32 { return base - float32(v/maxV)*ih*grow }
 		if o.Axes {
-			for _, f := range []float64{0.5, 1} {
-				yy := Y(maxV * f)
-				dashH(pt, r.X, r.X+iw, yy, p.L2, 2, 3)
-				p.axisText(pt, r.X+iw+6, yy-6, o.Tick(maxV*f), 0)
+			for k := 1; k <= 3; k++ {
+				yy := Y(maxV * float64(k) / 4)
+				var g ui.Path
+				g.MoveTo(r.X, yy).LineTo(r.X+r.W, yy).Dash(0, 2, 4)
+				pt.StrokePath(&g, 1, p.L2)
+				p.axisText(pt, r.X+4, yy-13, o.Tick(maxV*float64(k)/4), 0)
 			}
 		}
+		pt.Line(r.X, base, r.X+r.W, base, 1, p.L3)
 		if o.Columns {
-			bw := iw / float32(n)
+			cw := max(2, min(10, (r.W-2*padX)/float32(n)*0.55))
 			for i, v := range o.Values {
-				h := float32(v/colMax) * ih * 0.32 * grow
-				pt.Fill(ui.Rect{X: r.X + X(i, iw) - max(0.75, bw/2-1.5), Y: y0 + ih - h, W: max(1.5, bw-3), H: h}, pick(i == hover, p.L4, p.L3), 1)
+				if v <= 0 {
+					continue
+				}
+				h := float32(v/colMax) * ih * 0.22 * grow
+				pt.Fill(ui.Rect{X: X(i, r) - cw/2, Y: base - h, W: cw, H: h}, pick(i == hover, p.L4, colCol), 1)
 			}
 		}
 		line := func(arr []float64) [][2]float32 {
 			pts := make([][2]float32, len(arr))
 			for i, v := range arr {
-				pts[i] = [2]float32{r.X + X(i, iw), Y(v)}
+				pts[i] = [2]float32{X(i, r), Y(v)}
 			}
 			return pts
 		}
 		if len(ccum) > 1 {
-			dashPath(pt, line(ccum), p.T3, 1.2, 3, 3)
+			pts := line(ccum)
+			path := smoothPath(pts)
+			path.Dash(0, 3, 4)
+			pt.StrokePath(path, 1.5, p.Ink[2])
+			if o.CompareEnd != "" {
+				e := pts[len(pts)-1]
+				p.axisText(pt, min(e[0], r.X+r.W-4), e[1]-16, o.CompareEnd, 2)
+			}
 		}
 		if o.Pace > 0 {
-			dashPath(pt, [][2]float32{{r.X, Y(0)}, {r.X + X(n-1, iw), Y(o.Pace)}}, alpha(p.Sig, 0.5), 1, 2, 4)
+			var g ui.Path
+			g.MoveTo(r.X+padX, Y(0)).LineTo(X(n-1, r), Y(o.Pace)).Dash(0, 2, 4)
+			pt.StrokePath(&g, 1, alpha(p.Sig, 0.5))
 		}
 		if len(cum) > 0 {
 			pts := line(cum)
-			var area ui.Path
-			area.MoveTo(pts[0][0], y0+ih)
-			for _, q := range pts {
-				area.LineTo(q[0], q[1])
-			}
-			area.LineTo(pts[len(pts)-1][0], y0+ih).Close()
-			pt.FillPath(&area, alpha(o.Color, 0.09))
-			pt.StrokePolyline(pts, 2, o.Color)
+			fill := smoothPath(pts)
+			fill.LineTo(pts[len(pts)-1][0], base).LineTo(pts[0][0], base).Close()
+			pt.FillPath(fill, area)
+			stroke := smoothPath(pts)
+			stroke.Join(ui.RoundJoin)
+			pt.StrokePath(stroke, 2, o.Color)
 			lx, ly := pts[len(pts)-1][0], pts[len(pts)-1][1]
-			if o.ProjectTo > 0 {
-				dashPath(pt, [][2]float32{{lx, ly}, {r.X + X(n-1, iw), Y(proj)}}, alpha(o.Color, 0.6), 1.2, 2, 4)
+			if o.ProjectTo > 0 && o.ProjectTo > len(o.Values) {
+				var g ui.Path
+				g.MoveTo(lx, ly).LineTo(X(n-1, r), Y(proj)).Dash(0, 1, 4).Cap(ui.RoundCap)
+				pt.StrokePath(&g, 1.5, o.Color)
 			}
-			// The live end point: the one thing that glows.
-			dot := ui.Rect{X: lx - 3.5, Y: ly - 3.5, W: 7, H: 7}
-			pt.Shadow(dot, 3.5, 0, 0, 6, 0, p.glow())
-			pt.Fill(dot, p.Sig, 3.5)
+			p.nowDot(pt, lx, ly)
+			if o.NowLabel != "" {
+				p.axisTextC(pt, lx, ly-24, o.NowLabel, p.T2)
+			}
 		}
 		if hover >= 0 {
-			hx := r.X + X(hover, iw)
-			pt.Line(hx, y0, hx, y0+ih, 1, p.L4)
-			hd := ui.Rect{X: hx - 3, Y: Y(cum[hover]) - 3, W: 6, H: 6}
-			pt.Fill(hd, p.BG, 3)
-			pt.Stroke(hd, o.Color, 3, 1.5)
+			hx := X(hover, r)
+			pt.Line(hx, y0+40, hx, base, 1, p.L4)
+			if hover < len(ccum) {
+				pd := ui.Rect{X: hx - 2.6, Y: Y(ccum[hover]) - 2.6, W: 5.2, H: 5.2}
+				pt.Fill(pd, p.Surf, 2.6)
+				pt.Stroke(pd, p.Ink[2], 2.6, 1.5)
+			}
+			hd := ui.Rect{X: hx - 3.2, Y: Y(cum[hover]) - 3.2, W: 6.4, H: 6.4}
+			pt.Fill(hd, p.Surf, 3.2)
+			pt.Stroke(hd, o.Color, 3.2, 1.6)
 		}
 		if o.Labels != nil && n > 0 {
-			for k, i := range []int{0, (n - 1) / 2, n - 1} {
-				p.axisText(pt, r.X+X(i, iw), r.Y+r.H-13, o.Labels(i), k)
+			k := max(2, pick(o.Ticks > 0, o.Ticks, 5))
+			for j := range k {
+				i := j * (n - 1) / (k - 1)
+				p.axisText(pt, X(i, r), r.Y+r.H-12, o.Labels(i), pick(j == 0, 0, pick(j == k-1, 2, 1)))
 			}
 		}
 	})
 	if hover >= 0 && o.Tip != nil {
 		box.Children(func() {
 			title, rows := o.Tip(hover, cum[hover])
-			p.tooltip(c, X(hover, b.W-padR), 6, b.W, title, rows)
+			p.tooltip(c, X(hover, ui.Rect{W: b.W})-95, 8, b.W, title, rows)
 		})
 	}
 	return box
@@ -619,148 +689,6 @@ func (p palette) donut(c *ui.Context, key string, parts []part, size, thick floa
 	return box, hover
 }
 
-// ── Limits ──
-
-// dotGauge is the logo's ¾ arc as dots: used dots lit in ink, all signal once over the alert threshold;
-// hollow dots project where the current pace ends; a signal tick outside marks even pace.
-func (p palette) dotGauge(c *ui.Context, key string, used, pace float64, hot bool, size float32, label, sub string, showPace bool) ui.Element {
-	const n = 27
-	lh := pick(label != "", float32(13), 0) + pick(sub != "", float32(12), 0)
-	box := ui.Box(c.Key(key)).Size(size, size*0.84+lh).Shrink(0)
-	grow := box.AnimateTo("grow", 1, ui.Animation{Duration: 500 * time.Millisecond, Ease: ui.EaseOut})
-	proj := used
-	if pace > 0.1 {
-		proj = math.Min(100, used/pace)
-	}
-	box.Draw(func(pt *ui.Painter, r ui.Rect) {
-		cx, cy := r.X+size/2, r.Y+size/2
-		rad := size/2 - 6
-		dot := max(2.6, size/26)
-		pos := func(f float64, rr float32) (float32, float32) {
-			a := (-225 + f*270) * math.Pi / 180
-			return cx + rr*float32(math.Cos(a)), cy + rr*float32(math.Sin(a))
-		}
-		for i := range n {
-			f := float64(i) / (n - 1)
-			x, y := pos(f, rad)
-			d := ui.Rect{X: x - dot/2, Y: y - dot/2, W: dot, H: dot}
-			lit := f*100 <= used*float64(grow)+0.01
-			switch {
-			case lit && hot:
-				pt.Shadow(d, dot/2, 0, 0, 3, 0, p.glowSoft())
-				pt.Fill(d, p.Sig, dot/2)
-			case lit:
-				pt.Fill(d, p.T1, dot/2)
-			case f*100 <= proj && showPace:
-				pt.Stroke(d, p.T3, dot/2, 0.8)
-			default:
-				pt.Fill(d, p.DotOff, dot/2)
-			}
-		}
-		if showPace && pace > 0 {
-			x0, y0 := pos(pace, rad+1.5)
-			x1, y1 := pos(pace, rad+6)
-			pt.Line(x0, y0, x1, y1, 1.6, p.Sig)
-		}
-	})
-	box.Children(func() {
-		ui.Row(c).Absolute().Left(0).Top(size/2 - size*0.15).Width(size).Justify(ui.Center).AlignItems(ui.End).PassThrough().Children(func() {
-			ui.Text(c, itoa(int(math.Round(used)))).Font(uiFont).FontSize(size * 0.27).FontFeatures("tnum").TextColor(pick(hot, p.Sig, p.T1)).SingleLine()
-			ui.Text(c, "%").Font(monoFont).FontSize(max(9, size*0.11)).TextColor(p.T3).SingleLine()
-		})
-		ui.Column(c).Absolute().Left(-10).Top(size * 0.84).Width(size + 20).AlignItems(ui.Center).Gap(1).PassThrough().Children(func() {
-			if label != "" {
-				ui.Text(c, label).Font(monoFont).FontSize(9.5).LetterSpacing(0.6).TextColor(p.T2).SingleLine()
-			}
-			if sub != "" {
-				ui.Text(c, sub).Font(monoFont).FontSize(9.5).TextColor(p.T4).SingleLine()
-			}
-		})
-	})
-	return box
-}
-
-// paceMeter is a row of cells: filled in ink (signal over the threshold), hollow cells to the projection, and a
-// signal tick at even pace.
-func (p palette) paceMeter(c *ui.Context, key string, used, pace float64, hot bool, cells int, showPace bool) ui.Element {
-	box := ui.Box(c.Key(key)).Grow(1).MinWidth(40).Height(9)
-	grow := box.AnimateTo("grow", 1, animData)
-	proj := used
-	if pace > 0.1 {
-		proj = math.Min(100, used/pace)
-	}
-	box.Draw(func(pt *ui.Painter, r ui.Rect) {
-		const gap = 2
-		cw := (r.W - float32(cells-1)*gap) / float32(cells)
-		for i := range cells {
-			f := (float64(i) + 0.5) / float64(cells) * 100
-			cell := ui.Rect{X: r.X + float32(i)*(cw+gap), Y: r.Y, W: cw, H: r.H}
-			switch {
-			case f <= used*float64(grow) && hot:
-				pt.Shadow(cell, 1, 0, 0, 4, 0, p.glowSoft())
-				pt.Fill(cell, p.Sig, 1)
-			case f <= used*float64(grow):
-				pt.Fill(cell, p.T1, 1)
-			case f <= proj && showPace:
-				pt.Stroke(cell, p.T3, 1, 1)
-			default:
-				pt.Fill(cell, p.L3, 1)
-			}
-		}
-		if showPace && pace > 0 {
-			x := r.X + float32(pace)*r.W - 1
-			tick := ui.Rect{X: x, Y: r.Y - 3, W: 2, H: r.H + 6}
-			pt.Shadow(tick, 1, 0, 0, 4, 0, p.glow())
-			pt.Fill(tick, p.Sig, 1)
-		}
-	})
-	return box
-}
-
-type ringItem struct {
-	Used, Pace float64
-	Hot        bool
-}
-
-// rings is the Activity-style nest for the small Limits card.
-func (p palette) rings(c *ui.Context, key string, items []ringItem, size, thick float32) ui.Element {
-	box := ui.Box(c.Key(key)).Size(size, size).Shrink(0)
-	grow := box.AnimateTo("grow", 1, ui.Animation{Duration: 600 * time.Millisecond, Ease: ui.EaseOut})
-	box.Draw(func(pt *ui.Painter, r ui.Rect) {
-		cx, cy := r.X+size/2, r.Y+size/2
-		for k, it := range items {
-			rad := size/2 - thick/2 - float32(k)*(thick+3)
-			arc := func(a0, a1 float64, col ui.Color) {
-				var path ui.Path
-				steps := max(2, int((a1-a0)*30))
-				for i := 0; i <= steps; i++ {
-					a := a0 + (a1-a0)*float64(i)/float64(steps)
-					x, y := cx+rad*float32(math.Cos(a)), cy+rad*float32(math.Sin(a))
-					if i == 0 {
-						path.MoveTo(x, y)
-					} else {
-						path.LineTo(x, y)
-					}
-				}
-				pt.StrokePath(&path, thick, col)
-			}
-			arc(0, 2*math.Pi, p.L2)
-			col := []ui.Color{p.T1, p.Ink[1], p.Ink[2]}[min(k, 2)]
-			if it.Hot {
-				col = p.Sig
-			}
-			if it.Used > 0 {
-				arc(-math.Pi/2, -math.Pi/2+2*math.Pi*it.Used/100*float64(grow), col)
-			}
-			pa := -math.Pi/2 + 2*math.Pi*it.Pace
-			x0, y0 := cx+(rad-thick/2-1)*float32(math.Cos(pa)), cy+(rad-thick/2-1)*float32(math.Sin(pa))
-			x1, y1 := cx+(rad+thick/2+1)*float32(math.Cos(pa)), cy+(rad+thick/2+1)*float32(math.Sin(pa))
-			pt.Line(x0, y0, x1, y1, 1.5, p.Sig)
-		}
-	})
-	return box
-}
-
 // ── Treemap (squarified) ──
 
 type tmCell struct {
@@ -840,8 +768,9 @@ type tmGroup struct {
 	Items []part
 }
 
-// treemap lays groups out first, then their items inside; light reports whether a fill needs dark text.
-func (p palette) treemap(c *ui.Context, key string, groups []tmGroup, tip func(cell tmCell) (string, []tipRow)) ui.Element {
+// treemap lays groups out first, then their items inside: tiles 2 apart, each in its model's colour with its name
+// and "value · share" on it (ink chosen for contrast).
+func (p palette) treemap(c *ui.Context, key string, groups []tmGroup, total float64, tip func(cell tmCell) (string, []tipRow)) ui.Element {
 	box := ui.Box(c.Key(key)).Grow(1).FillWidth().MinHeight(60)
 	b := box.Bounds()
 	gs := make([]part, len(groups))
@@ -878,25 +807,26 @@ func (p palette) treemap(c *ui.Context, key string, groups []tmGroup, tip func(c
 	}
 	box.Children(func() {
 		for i, cl := range cells {
-			cell := ui.Box(c.Key(cl.ID)).Absolute().Left(cl.X+1).Top(cl.Y+1).Size(max(0, cl.W-2), max(0, cl.H-2)).Radius(3).Clip().
+			cell := ui.Box(c.Key(cl.ID)).Absolute().Left(cl.X).Top(cl.Y).Size(max(0, cl.W-2), max(0, cl.H-2)).Radius(4).Clip().
 				Background(cl.Color).Opacity(box.AnimateTo("o"+cl.ID, pick(hover >= 0 && hover != i, float32(0.45), 1), animHover)).PassThrough()
-			ink := pick(luminance(cl.Color) > 0.5, ui.Hex("#14120b"), ui.Hex("#ffffff"))
+			ink := inkOn(cl.Color)
+			share := ftoa(cl.V/math.Max(1, total)*100, 1) + "%"
 			cell.Children(func() {
-				if cl.Band.A > 0 {
-					ui.Box(c).Absolute().Left(0).Top(0).Width(3).FillHeight().Background(cl.Band)
-				}
-				if cl.W > 56 && cl.H > 32 {
-					ui.Column(c).Padding(6, 7, 6, 10).Gap(2).Children(func() {
+				switch {
+				case cl.W > 70 && cl.H > 40:
+					ui.Column(c).Padding(8, 10).Gap(3).Children(func() {
 						ui.Row(c).Gap(5).AlignItems(ui.Center).Children(func() {
 							for _, g := range groups {
 								if g.ID == cl.Group && g.Logo != "" {
-									logo(c, g.Logo, 11, ink)
+									logo(c, g.Logo, 12, ink)
 								}
 							}
-							ui.Text(c, cl.ID).Font(monoFont).FontSize(11).FontWeight(500).TextColor(ink).SingleLine().Ellipsis("…")
+							ui.Text(c, cl.ID).Font(monoFont).FontSize(pick(cl.W > 160, float32(13), 11.5)).FontWeight(500).TextColor(ink).SingleLine().Ellipsis("…")
 						})
-						ui.Text(c, shortNum(cl.V)).Font(monoFont).FontSize(10.5).TextColor(alpha(ink, 0.7)).SingleLine()
+						ui.Text(c, shortNum(cl.V)+" · "+share).Font(monoFont).FontSize(11).TextColor(alpha(ink, 0.8)).SingleLine().Ellipsis("…")
 					})
+				case cl.W > 60 && cl.H > 16:
+					ui.Text(c, cl.ID+" · "+share).Font(monoFont).FontSize(10).TextColor(ink).Padding(pick(cl.H > 24, float32(6), 2), 8).SingleLine().Ellipsis("…")
 				}
 			})
 		}
@@ -917,14 +847,17 @@ type flow struct {
 }
 
 type sankeyNode struct {
-	ID, Label string
-	Color     ui.Color
+	ID, Label, Sub string
+	Color          ui.Color
+	Strong         bool // its ribbons stand out at rest (the biggest tool)
 }
 
-func (p palette) sankey(c *ui.Context, key string, left, right []sankeyNode, flows []flow, linkColor func(to string) ui.Color, tip func(f flow) (string, []tipRow)) ui.Element {
+// sankey draws tools on the left and models on the right with ribbons in the tool's colour between them; the
+// biggest tool's ribbons stand out, hovering one lights its paths.
+func (p palette) sankey(c *ui.Context, key string, left, right []sankeyNode, flows []flow, linkColor func(f flow) ui.Color, tip func(f flow) (string, []tipRow)) ui.Element {
 	box := ui.Box(c.Key(key)).Grow(1).FillWidth().MinHeight(60)
 	b := box.Bounds()
-	const nodeW, gap, lw, rw = 6, 6, 84, 120
+	const nodeW, gap, lw, rw = 6, 8, 104, 126
 	total := 0.0
 	for _, f := range flows {
 		total += f.V
@@ -997,9 +930,18 @@ func (p palette) sankey(c *ui.Context, key string, left, right []sankeyNode, flo
 			var path ui.Path
 			ya, yb := r.Y+l.a, r.Y+l.b
 			path.MoveTo(xa, ya).CubeTo(cx, ya, cx, yb, xb, yb).LineTo(xb, yb+l.h).CubeTo(cx, yb+l.h, cx, ya+l.h, xa, ya+l.h).Close()
-			on := hover < 0 || hover == i || links[hover].f.From == l.f.From || links[hover].f.To == l.f.To
-			a := pick(on, pick(hover >= 0, float32(0.55), 0.32), 0.06) * grow
-			pt.FillPath(&path, alpha(linkColor(l.f.To), a))
+			strong := false
+			for _, n := range left {
+				if n.ID == l.f.From {
+					strong = n.Strong
+				}
+			}
+			a := pick(strong, float32(0.5), 0.22)
+			if hover >= 0 {
+				on := hover == i || links[hover].f.From == l.f.From
+				a = pick(on, float32(0.55), 0.06)
+			}
+			pt.FillPath(&path, alpha(linkColor(l.f), a*grow))
 		}
 		// Labels keep at least a line apart: small nodes at the bottom push their labels down instead of piling up.
 		const lineH = 13
@@ -1007,21 +949,25 @@ func (p palette) sankey(c *ui.Context, key string, left, right []sankeyNode, flo
 		for _, n := range left {
 			s := L[n.ID]
 			pt.Fill(ui.Rect{X: r.X + x0, Y: r.Y + s.y, W: nodeW, H: max(1, s.h)}, n.Color, 1.5)
-			sp := ui.Span{Text: n.Label, Font: monoFont, Size: 11, Color: p.T2}
+			sp := ui.Span{Text: n.Label, Font: uiFont, Size: 12, Color: pick(n.Strong, p.T1, p.T2)}
 			w, h := pt.MeasureText(0, sp)
-			y := max(r.Y+s.y+s.h/2-h/2, last+lineH)
+			sub := ui.Span{Text: n.Sub, Font: monoFont, Size: 10, Color: p.T3}
+			sw, sh := pt.MeasureText(0, sub)
+			y := max(r.Y+s.y+s.h/2-(h+sh)/2, last+lineH+sh)
 			last = y
 			pt.RichText(r.X+x0-8-w, y, 0, sp)
+			pt.RichText(r.X+x0-8-sw, y+h, 0, sub)
 		}
 		last = -1e9
 		for _, n := range right {
 			s := R[n.ID]
 			pt.Fill(ui.Rect{X: r.X + x1, Y: r.Y + s.y, W: nodeW, H: max(1, s.h)}, n.Color, 1.5)
-			sp := ui.Span{Text: n.Label, Font: monoFont, Size: 11, Color: p.T2}
-			_, h := pt.MeasureText(0, sp)
+			sp := ui.Span{Text: n.Label, Font: monoFont, Size: 11, Color: p.T1}
+			w, h := pt.MeasureText(0, sp)
 			y := max(r.Y+s.y+s.h/2-h/2, last+lineH)
 			last = y
 			pt.RichText(r.X+x1+nodeW+8, y, 0, sp)
+			pt.RichText(r.X+x1+nodeW+8+w+6, y+1, 0, ui.Span{Text: n.Sub, Font: monoFont, Size: 10, Color: p.T3})
 		}
 	})
 	if hover >= 0 && tip != nil {
@@ -1035,164 +981,11 @@ func (p palette) sankey(c *ui.Context, key string, left, right []sankeyNode, flo
 
 // ── Calendar and punchcard ──
 
-type calCell struct {
-	Date time.Time
-	V    float64
-}
-
-// calendarDots draws weekly columns of dots, five quintile steps of col; today ringed.
-func (p palette) calendarDots(c *ui.Context, key string, cells []calCell, col ui.Color, tip func(i int) (string, []tipRow)) ui.Element {
-	box := ui.Box(c.Key(key)).Grow(1).FillWidth().MinHeight(50)
-	if len(cells) == 0 {
-		return box
-	}
-	var nz []float64
-	for _, cl := range cells {
-		if cl.V > 0 {
-			nz = append(nz, cl.V)
-		}
-	}
-	sort.Float64s(nz)
-	var q [4]float64
-	for i, f := range []float64{0.2, 0.4, 0.6, 0.8} {
-		if len(nz) > 0 {
-			q[i] = nz[int(f*float64(len(nz)-1))]
-		}
-	}
-	step := func(v float64) int {
-		if v <= 0 {
-			return 0
-		}
-		s := 1
-		for _, t := range q {
-			if v > t {
-				s++
-			}
-		}
-		return s
-	}
-	start := cells[0].Date.AddDate(0, 0, -int(cells[0].Date.Weekday()))
-	weeks := int(cells[len(cells)-1].Date.Sub(start).Hours()/24)/7 + 1
-	const labW = 18
-	b := box.Bounds()
-	cell := min((b.W-labW)/float32(weeks), b.H/7)
-	posOf := func(i int) (int, int) {
-		d := int(math.Round(cells[i].Date.Sub(start).Hours() / 24))
-		return d / 7, int(cells[i].Date.Weekday())
-	}
-	hover := -1
-	if px, py, over := box.PointerPosition(); over && cell > 0 {
-		cw, rr := int((px-labW)/cell), int(py/cell)
-		for i := range cells {
-			if wk, wd := posOf(i); wk == cw && wd == rr {
-				hover = i
-			}
-		}
-	}
-	tones := [6]float32{0, 0.26, 0.45, 0.66, 0.84, 1}
-	grow := box.AnimateTo("grow", 1, ui.Animation{Duration: 500 * time.Millisecond, Ease: ui.EaseOut})
-	box.Draw(func(pt *ui.Painter, r ui.Rect) {
-		for i, l := range []string{"M", "W", "F"} {
-			p.axisText(pt, r.X, r.Y+float32(1+i*2)*cell+cell/2-6, l, 0)
-		}
-		rad := max(1.4, cell*0.36)
-		shown := int(float32(weeks) * grow)
-		for i, cl := range cells {
-			wk, wd := posOf(i)
-			if wk > shown {
-				continue
-			}
-			s := step(cl.V)
-			col2 := p.DotOff
-			if s > 0 {
-				col2 = p.L2.Mix(col, tones[s])
-			}
-			rr := rad + pick(i == hover, float32(1), 0)
-			x, y := r.X+labW+float32(wk)*cell+cell/2, r.Y+float32(wd)*cell+cell/2
-			d := ui.Rect{X: x - rr, Y: y - rr, W: 2 * rr, H: 2 * rr}
-			pt.Fill(d, col2, rr)
-			if i == len(cells)-1 {
-				pt.Stroke(ui.Rect{X: d.X - 1.5, Y: d.Y - 1.5, W: d.W + 3, H: d.H + 3}, p.T1, rr+1.5, 1.2)
-			}
-		}
-	})
-	if hover >= 0 && tip != nil {
-		box.Children(func() {
-			wk, _ := posOf(hover)
-			title, rows := tip(hover)
-			p.tooltip(c, labW+float32(wk)*cell, -4, b.W, title, rows)
-		})
-	}
-	return box
-}
-
-// heatScale is the Less → More legend.
-func (p palette) heatScale(c *ui.Context, col ui.Color) ui.Element {
-	return ui.Row(c).Gap(4).AlignItems(ui.Center).Shrink(0).Children(func() {
-		p.mono(c, "Less", 9.5, p.T4)
-		for _, t := range []float32{0, 0.26, 0.45, 0.66, 0.84, 1} {
-			ui.Box(c).Size(7, 7).Radius(3.5).Background(pick(t == 0, p.DotOff, p.L2.Mix(col, t)))
-		}
-		p.mono(c, "More", 9.5, p.T4)
-	})
-}
-
-// punchcard is weekday × hour, dot area ∝ usage. grid[0] is Monday.
-func (p palette) punchcard(c *ui.Context, key string, grid [7][24]float64, col ui.Color, tip func(wd, hr int) (string, []tipRow)) ui.Element {
-	box := ui.Box(c.Key(key)).Grow(1).FillWidth().MinHeight(60)
-	maxV := 1e-9
-	for _, row := range grid {
-		for _, v := range row {
-			maxV = math.Max(maxV, v)
-		}
-	}
-	const labW, labH = 26, 14
-	b := box.Bounds()
-	cw, ch := (b.W-labW)/24, (b.H-labH)/7
-	hr, wd := -1, -1
-	if px, py, over := box.PointerPosition(); over && cw > 0 && ch > 0 {
-		hr, wd = int((px-labW)/cw), int(py/ch)
-		if hr < 0 || hr > 23 || wd < 0 || wd > 6 {
-			hr, wd = -1, -1
-		}
-	}
-	grow := box.AnimateTo("grow", 1, ui.Animation{Duration: 500 * time.Millisecond, Ease: ui.EaseOut})
-	box.Draw(func(pt *ui.Painter, r ui.Rect) {
-		cw, ch := (r.W-labW)/24, (r.H-labH)/7
-		R := min(cw, ch)/2 - 0.6
-		for i, d := range []string{"Mon", "", "Wed", "", "Fri", "", "Sun"} {
-			if d != "" {
-				p.axisText(pt, r.X, r.Y+float32(i)*ch+ch/2-6, d, 0)
-			}
-		}
-		for _, h := range []int{0, 6, 12, 18} {
-			p.axisText(pt, r.X+labW+float32(h)*cw+cw/2, r.Y+r.H-12, itoa(h), 1)
-		}
-		for w := range 7 {
-			for h := range 24 {
-				v := grid[w][h]
-				x, y := r.X+labW+float32(h)*cw+cw/2, r.Y+float32(w)*ch+ch/2
-				if v <= 0 {
-					pt.Fill(ui.Rect{X: x - 1, Y: y - 1, W: 2, H: 2}, p.DotOff, 1)
-					continue
-				}
-				f := math.Sqrt(v / maxV)
-				rr := max(1, float32(f)*R*grow)
-				a := float32(0.35 + 0.65*f)
-				if w == wd && h == hr {
-					a = 1
-				}
-				pt.Fill(ui.Rect{X: x - rr, Y: y - rr, W: 2 * rr, H: 2 * rr}, alpha(col, a), rr)
-			}
-		}
-	})
-	if hr >= 0 && tip != nil {
-		box.Children(func() {
-			title, rows := tip(wd, hr)
-			p.tooltip(c, labW+float32(hr)*cw, float32(wd)*ch-44, b.W, title, rows)
-		})
-	}
-	return box
+// inkOn is the text colour that reads best on a fill: near-black or near-white, by contrast ratio.
+func inkOn(fill ui.Color) ui.Color {
+	l := luminance(fill)
+	dark, light := (l+0.05)/0.054, 1.05/(l+0.05) // against #0a0a0a and #ededed (luminance ≈ 0.004 and 0.85)
+	return pick(dark >= light, ui.Hex("#0a0a0a"), ui.Hex("#ededed"))
 }
 
 // shortNum is the short form used by axis ticks and chart labels (always short).

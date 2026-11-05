@@ -631,7 +631,9 @@ func (a *ctrl) menuBarSegs() []mbSeg {
 			if !ok {
 				continue
 			}
-			used, pace, hot, _ := a.limitView(w)
+			used := pick(m.s.LimitShowUsed, w.UsedPercent, w.Remaining())
+			pace, _ := w.Elapsed(now)
+			hot := w.UsedPercent >= m.s.TopThreshold()
 			if len(providers) > 1 {
 				label = limits.Provider(prov).DisplayName() + " " + label
 			}
