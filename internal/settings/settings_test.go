@@ -36,7 +36,7 @@ func TestImportDefaultsKeepsKnownKeys(t *testing.T) {
 	if !slices.Equal(s.MenuBarItems, []string{"claude.weekly", "today.tokens"}) || s.TopThreshold() != 90 {
 		t.Fatalf("items %v thresholds %v", s.MenuBarItems, s.AlertThresholds)
 	}
-	if s.PanelWidth != 360 {
+	if s.PanelWidth != 340 {
 		t.Fatalf("a malformed value must keep the default, got %d", s.PanelWidth)
 	}
 	_ = os.Getenv

@@ -416,7 +416,7 @@ func (a *ctrl) heroCard(c *ui.Context, p palette, size cardSize, rep analytics.R
 }
 
 func legendItem(c *ui.Context, p palette, label string, mark func(pt *ui.Painter, r ui.Rect)) {
-	ui.Row(c.Key("lg"+label)).Gap(6).AlignItems(ui.Center).Shrink(0).Children(func() {
+	ui.Row(c.Key("lg" + label)).Gap(6).AlignItems(ui.Center).Shrink(0).Children(func() {
 		ui.Box(c).Size(14, 10).Draw(mark)
 		p.mono(c, label, 10.5, p.T3)
 	})
@@ -625,7 +625,7 @@ func longestStreak(days []analytics.DaySummary) int {
 // activeDots is the active-days grid: 15 a row, active days in the accent, idle days a hairline ring, today lit.
 func (a *ctrl) activeDots(c *ui.Context, p palette, days []analytics.DaySummary, col ui.Color) {
 	rows := (len(days) + 14) / 15
-	ui.Box(c.Key("dots")).FillWidth().Height(float32(rows)*14).Shrink(0).Draw(func(pt *ui.Painter, r ui.Rect) {
+	ui.Box(c.Key("dots")).FillWidth().Height(float32(rows) * 14).Shrink(0).Draw(func(pt *ui.Painter, r ui.Rect) {
 		const gap = 4
 		d := min(10, (r.W-14*gap)/15)
 		for i, day := range days {

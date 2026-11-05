@@ -637,7 +637,11 @@ func (a *ctrl) menuBarSegs() []mbSeg {
 			if len(providers) > 1 {
 				label = limits.Provider(prov).DisplayName() + " " + label
 			}
-			segs = append(segs, mbSeg{Label: label, Value: itoa(int(used+0.5)) + "%", Pct: used, Pace: pace, Hot: hot})
+			seg := mbSeg{Label: label, Value: itoa(int(used+0.5)) + "%", Pct: used, Pace: pace, Hot: hot}
+			if m.s.MenuBarShowReset && w.Kind == limits.Session && w.ResetsAt != nil {
+				seg.After = format.MenuBarCountdown(w.ResetsAt.Sub(now))
+			}
+			segs = append(segs, seg)
 		}
 	}
 	return segs
@@ -666,11 +670,7 @@ func (a *ctrl) syncMenuBar() {
 	if a.tray == nil {
 		return
 	}
-	s := a.m.s
-	png, tmpl := renderMenuBar(a.menuBarSegs(), mbOpts{
-		Style: mbStyle(s.MenuBarStyle), Labels: s.MenuBarShowLabels || s.MenuBarStyle == "stacked", Pace: s.MenuBarShowPace,
-		Icon: s.MenuBarShowIcon, Red: s.MenuBarAlertColor, Dark: a.tray.Dark(),
-	})
+	png, tmpl := renderMenuBar(a.menuBarSegs(), a.mbOptions(a.tray.Dark(), false))
 	key := string(png)
 	if key == a.trayKey {
 		return

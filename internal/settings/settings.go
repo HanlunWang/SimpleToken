@@ -49,11 +49,12 @@ type Settings struct {
 
 	// Menu bar
 	MenuBarItems      []string `json:"menuBarItems"`
-	MenuBarStyle      string   `json:"menuBarStyle"` // text stacked dense ring rings bar
+	MenuBarStyle      string   `json:"menuBarStyle"` // gauge numbers bars (0.1.x: text stacked dense ring rings bar)
 	MenuBarShowLabels bool     `json:"menuBarShowLabels"`
 	MenuBarAlertColor bool     `json:"menuBarAlertColor"`
 	MenuBarShowIcon   bool     `json:"menuBarShowIcon"`
 	MenuBarShowPace   bool     `json:"menuBarShowPace"`
+	MenuBarShowReset  bool     `json:"menuBarShowReset"`
 
 	// Panel
 	PanelSections   []string `json:"panelSections"`
@@ -113,9 +114,9 @@ func Default() Settings {
 		Theme: "system", Palette: "graphite", SeriesColors: "vendor", VendorMarks: "color", PanelMaterial: "glass",
 		LiveRefreshSeconds: 30, FullRefreshMinutes: 15,
 		LimitShowUsed: true, AlertThresholds: []float64{50, 80}, LimitShowPace: true, LimitShowModelBuckets: true,
-		MenuBarItems: []string{"claude.session"}, MenuBarStyle: "text", MenuBarAlertColor: true, MenuBarShowIcon: true, MenuBarShowPace: true,
-		PanelSections: []string{"claude", "codex", "cursor", "today", "models"}, PanelWidth: 360, PanelLimitStyle: "meters",
-		PanelListCount: 4, PanelTodayStyle: "cumulative", PanelShowResets: true,
+		MenuBarItems: []string{"claude.session"}, MenuBarStyle: "gauge", MenuBarAlertColor: true, MenuBarShowIcon: true, MenuBarShowPace: true,
+		PanelSections: []string{"claude", "codex", "today", "models", "week"}, PanelWidth: 340, PanelLimitStyle: "gauges",
+		PanelListCount: 5, PanelTodayStyle: "cumulative", PanelShowResets: true,
 		ModelColorOverrides: map[string]string{}, ToolColorOverrides: map[string]string{}, ModelAliases: map[string]string{},
 		SeparateModels: 4,
 		CardOrder:      slices.Clone(Cards), HiddenCards: slices.Clone(DefaultHidden),
@@ -186,6 +187,17 @@ func (s *Settings) normalize() {
 	}
 	if s.PanelWidth < 300 {
 		s.PanelWidth = d.PanelWidth
+	}
+	// 0.1.x's six menu bar styles fold into the three of v2.
+	switch s.MenuBarStyle {
+	case "gauge", "numbers", "bars":
+	case "text", "stacked", "dense":
+		s.MenuBarStyle = "numbers"
+	default:
+		s.MenuBarStyle = "gauge"
+	}
+	if len(s.MenuBarItems) > 3 {
+		s.MenuBarItems = s.MenuBarItems[:3]
 	}
 	// Every known card appears once in the order (new cards are appended).
 	seen := map[string]bool{}

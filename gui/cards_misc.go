@@ -282,7 +282,7 @@ func (a *ctrl) costCard(c *ui.Context, p palette, size cardSize) {
 	}
 	scale := math.Max(math.Max(mc.Projected, mc.LastMonthTotal), spent) * 1.06
 	costBar := func(height float32, marker bool) {
-		ui.Box(c.Key("bar")).FillWidth().Height(height+pick(marker, float32(18), 4)).Shrink(0).Draw(func(pt *ui.Painter, rr ui.Rect) {
+		ui.Box(c.Key("bar")).FillWidth().Height(height + pick(marker, float32(18), 4)).Shrink(0).Draw(func(pt *ui.Painter, rr ui.Rect) {
 			if scale <= 0 {
 				return
 			}

@@ -1,6 +1,7 @@
 package gui
 
 import (
+	"math"
 	"slices"
 	"strings"
 	"time"
@@ -14,14 +15,16 @@ import (
 	"github.com/HanlunWang/SimpleToken/internal/settings"
 )
 
-var settingsTabs = [][3]string{
-	{"general", "General", "sliders-horizontal"}, {"appearance", "Appearance", "palette"}, {"menubar", "Menu Bar", "panel-top"},
-	{"panel", "Panel", "panel-top-open"}, {"widgets", "Widgets", "layout-grid"}, {"models", "Models & Tools", "boxes"},
-	{"limits", "Limits & Alerts", "gauge"}, {"data", "Data", "database"},
+// Settings live in the main window (designs/simpletoken-v3 Settings boards): a sidebar of sections, then groups
+// of rows in two columns, each with its heading above it.
+
+var settingsTabs = [][2]string{
+	{"general", "General"}, {"menubar", "Menu bar & panel"}, {"dashboard", "Dashboard"}, {"limits", "Limits"},
+	{"data", "Data sources"}, {"appearance", "Appearance"}, {"updates", "Updates"},
 }
 
-// navItem is a sidebar row: mono label, › and the signal colour when selected, no fill.
-func (p palette) navItem(c *ui.Context, key, iconName, label string, selected bool) ui.Element {
+// navItem is a sidebar row: mono label, › and the signal colour when selected, no fill; trail on the right.
+func (p palette) navItem(c *ui.Context, key, label string, selected bool, trail func()) ui.Element {
 	r := ui.Row(c.Key(key)).FillWidth().Height(28).Padding(0, 8, 0, 14).Radius(p.rCtl()).Gap(9).AlignItems(ui.Center).Label(label)
 	r.Background(r.AnimateColor("hover", pick(r.Hovered() && !selected, p.L1, ui.Transparent), animHover))
 	col := pick(selected, p.Sig, pick(r.Hovered(), p.T1, p.T2))
@@ -30,76 +33,131 @@ func (p palette) navItem(c *ui.Context, key, iconName, label string, selected bo
 		if selected {
 			ui.Text(c.Key("sel"), "›").Font(monoFont).FontSize(13).FontWeight(600).TextColor(p.Sig).Absolute().Left(2).Top(5).PassThrough()
 		}
-		icon(c, iconName, 15).TextColor(col)
-		ui.Text(c, label).Font(monoFont).FontSize(12.5).TextColor(col).SingleLine().Grow(1)
+		ui.Text(c, label).Font(monoFont).FontSize(12.5).FontWeight(pick(selected, 500, 400)).TextColor(col).SingleLine().Grow(1)
+		if trail != nil {
+			trail()
+		}
 	})
 	return r
 }
 
-// sGroup is a framed group of rows with its caption on the frame.
-func (p palette) sGroup(c *ui.Context, key, title string, right func(), body func()) {
-	ui.Column(c.Key(key)).FillWidth().Margin(18, 0, 0).Padding(8, 16).Radius(p.rCard()).Border(1, p.L2).Children(func() {
-		ui.Row(c.Key("t")).Absolute().Top(-8).Left(10).Padding(0, 6).Background(p.BG).Children(func() { p.caption(c, title) })
-		if right != nil {
-			ui.Row(c.Key("r")).Absolute().Top(-11).Right(10).Padding(0, 6).Background(p.BG).Gap(6).Children(right)
+// sHead is a group's heading: a title and a quiet description beside it.
+func (p palette) sHead(c *ui.Context, title, desc string) {
+	ui.Row(c.Key("h"+title)).FillWidth().Gap(10).AlignItems(ui.Baseline).Shrink(0).Children(func() {
+		ui.Text(c, title).FontSize(15).FontWeight(600).TextColor(p.T1).SingleLine()
+		if desc != "" {
+			ui.Text(c, desc).FontSize(11).TextColor(p.T3).SingleLine().MinWidth(0).Ellipsis("…")
 		}
+	})
+}
+
+// sGroup is a group of rows on the card ground (theme.css .sgroup); rows draw a hairline above all but the first.
+func (a *ctrl) sGroup(c *ui.Context, p palette, key string, body func()) {
+	ui.Column(c.Key(key)).FillWidth().Padding(4, 16).Radius(8).Border(1, p.L2).Background(p.Surf).Shrink(0).Children(func() {
+		a.w.firstRow = true
 		body()
 	})
 }
 
-// sRow is one setting: label and detail on the left, the control on the right, a hairline below.
-func (p palette) sRow(c *ui.Context, key, label, detail string, control func()) {
-	ui.Row(c.Key(key)).FillWidth().Padding(11, 0).Gap(16).AlignItems(ui.Center).Children(func() {
+// sRow is one setting (theme.css .srow): label and detail on the left, the control on the right.
+func (a *ctrl) sRow(c *ui.Context, p palette, key, label, detail string, control func()) {
+	first := a.w.firstRow
+	a.w.firstRow = false
+	ui.Row(c.Key(key)).FillWidth().MinHeight(48).Padding(8, 0).Gap(16).AlignItems(ui.Center).Children(func() {
+		if !first {
+			ui.Box(c).Absolute().Left(0).Top(0).FillWidth().Height(1).Background(p.L2)
+		}
 		ui.Column(c).Grow(1).Basis(0).MinWidth(0).Gap(3).Children(func() {
-			ui.Text(c, label).FontSize(12.5).TextColor(p.T1).Wrap()
+			ui.Text(c, label).FontSize(13).FontWeight(500).TextColor(p.T1).Wrap()
 			if detail != "" {
-				ui.Text(c, detail).FontSize(11).TextColor(p.T3).LineHeight(1.5).Wrap()
+				ui.Text(c, detail).FontSize(11).TextColor(p.T3).LineHeight(1.4).Wrap()
 			}
 		})
-		ui.Row(c).Gap(6).AlignItems(ui.Center).Shrink(0).Children(control)
+		ui.Row(c).Gap(8).AlignItems(ui.Center).Shrink(0).Children(control)
 	})
 }
 
 func (a *ctrl) settingsPage(c *ui.Context, p palette) {
 	w := a.w
+	if !slices.ContainsFunc(settingsTabs, func(t [2]string) bool { return t[0] == w.tab }) {
+		w.tab = settingsTabs[0][0]
+	}
 	ui.Row(c.Key("sp")).Fill().Children(func() {
-		ui.Column(c.Key("nav")).Width(200).FillHeight().Background(p.BG2).Padding(14, 10).Gap(1).Shrink(0).Children(func() {
+		ui.Column(c.Key("nav")).Width(236).FillHeight().Background(p.BG2).Padding(14, 8, 8).Gap(1).Shrink(0).Children(func() {
 			ui.Box(c).Absolute().Right(0).Top(0).Width(1).FillHeight().Background(p.L2)
 			for _, t := range settingsTabs {
-				if p.navItem(c, t[0], t[2], L(t[1]), w.tab == t[0]).Clicked() {
+				var trail func()
+				switch t[0] {
+				case "limits":
+					trail = func() { p.mono(c, itoa(a.limitWindowCount()), 11, p.T4) }
+				case "data":
+					trail = func() { p.mono(c, itoa(len(a.m.report("1M", "tokens").Clients)), 11, p.T4) }
+				case "updates":
+					if _, ready, _, _ := a.upd.state(); ready != "" {
+						trail = func() { p.badge(c, L("NEW"), "sig").Height(16) }
+					}
+				}
+				if p.navItem(c, t[0], L(t[1]), w.tab == t[0], trail).Clicked() {
 					w.tab = t[0]
 				}
 			}
+			ui.Box(c).Grow(1)
+			if a.running {
+				p.mono(c, "v"+mygo.App.Version(), 10.5, p.T4).Padding(8, 14)
+			}
 		})
 		ui.Scroll(c.Key("body")).Grow(1).FillHeight().Children(func() {
-			ui.Column(c.Key(w.tab)).FillWidth().MaxWidth(760).Padding(8, 36, 40).
+			ui.Column(c.Key(w.tab)).FillWidth().Padding(22, 28, 40).
 				Transition(ui.ElementTransition{Duration: 180 * time.Millisecond, Enter: &ui.Motion{Y: 6}}).Children(func() {
 				switch w.tab {
 				case "general":
 					a.setGeneral(c, p)
-				case "appearance":
-					a.setAppearance(c, p)
 				case "menubar":
 					a.setMenuBar(c, p)
-				case "panel":
-					a.setPanel(c, p)
-				case "widgets":
-					a.setWidgets(c, p)
-				case "models":
-					a.setModels(c, p)
+				case "dashboard":
+					a.setDashboard(c, p)
 				case "limits":
 					a.setLimits(c, p)
 				case "data":
 					a.setData(c, p)
+				case "appearance":
+					a.setAppearance(c, p)
+				case "updates":
+					a.setUpdates(c, p)
 				}
 			})
 		})
 	})
 }
 
+// columns lays groups out in two columns, one below the other when the window is narrow.
+func (a *ctrl) columns(c *ui.Context, left, right func()) {
+	if a.w.winW > 0 && a.w.winW < 980 {
+		ui.Column(c.Key("cols")).FillWidth().Gap(24).Children(func() {
+			ui.Column(c.Key("l")).FillWidth().Gap(12).Children(left)
+			ui.Column(c.Key("r")).FillWidth().Gap(12).Children(right)
+		})
+		return
+	}
+	ui.Row(c.Key("cols")).FillWidth().Gap(24).AlignItems(ui.Start).Children(func() {
+		ui.Column(c.Key("l")).Grow(1).Basis(0).MinWidth(0).Gap(12).Children(left)
+		ui.Column(c.Key("r")).Grow(1).Basis(0).MinWidth(0).Gap(12).Children(right)
+	})
+}
+
+func (a *ctrl) limitWindowCount() int {
+	n := 0
+	for _, e := range a.m.d.Limits {
+		if e.Snapshot != nil && !slices.Contains(a.m.s.HiddenLimitProviders, string(e.Provider)) {
+			n += len(e.Snapshot.Windows)
+		}
+	}
+	return n
+}
+
 // toggleRow binds a bool setting.
 func (a *ctrl) toggleRow(c *ui.Context, p palette, key, label, detail string, v *bool) {
-	p.sRow(c, key, label, detail, func() {
+	a.sRow(c, p, key, label, detail, func() {
 		if p.toggle(c, "t", v).Changed() {
 			a.saveSettings()
 		}
@@ -111,7 +169,7 @@ func (a *ctrl) segRow(c *ui.Context, p palette, key, label, detail string, v *st
 	for i := range opts {
 		opts[i][1] = L(opts[i][1])
 	}
-	p.sRow(c, key, label, detail, func() {
+	a.sRow(c, p, key, label, detail, func() {
 		if p.segValue(c, "s", v, opts) {
 			a.saveSettings()
 		}
@@ -120,7 +178,7 @@ func (a *ctrl) segRow(c *ui.Context, p palette, key, label, detail string, v *st
 
 // intSeg binds an int setting.
 func (a *ctrl) intSeg(c *ui.Context, p palette, key, label, detail string, v *int, opts []int, name func(int) string) {
-	p.sRow(c, key, label, detail, func() {
+	a.sRow(c, p, key, label, detail, func() {
 		sel := slices.Index(opts, *v)
 		labels := make([]string, len(opts))
 		for i, o := range opts {
@@ -133,203 +191,216 @@ func (a *ctrl) intSeg(c *ui.Context, p palette, key, label, detail string, v *in
 	})
 }
 
+// ── General ──
+
 func (a *ctrl) setGeneral(c *ui.Context, p palette) {
 	s := &a.m.s
-	p.sGroup(c, "numbers", L("Numbers"), nil, func() {
-		p.sRow(c, "exact", L("Token numbers"), L("Axis ticks are always short"), func() {
-			sel := pick(s.ExactNumbers, 1, 0)
-			if n := p.segmented(c, "s", sel, L("Short 4.96 B"), L("Exact 4,959,084,551")); n != sel {
-				s.ExactNumbers = n == 1
-				a.saveSettings()
-			}
-		})
-		a.segRow(c, p, "metric", L("Main metric"), "", &s.Metric, [][2]string{{"tokens", "Tokens"}, {"cost", "Cost"}, {"messages", "Messages"}})
-	})
-	p.sGroup(c, "window", L("Window"), nil, func() {
-		a.toggleRow(c, p, "ontop", L("Keep main window on top"), "", &s.FloatingWindow)
-		p.sRow(c, "login", L("Open at login"), L("macOS may ask you to approve it in System Settings → General → Login Items"), func() {
-			if a.w.login == nil {
-				on := a.loginGet()
-				a.w.login = &on
-			}
-			if p.toggle(c, "t", a.w.login).Changed() {
-				a.loginSet(*a.w.login)
-			}
-		})
-		a.updateRows(c, p)
-		p.sRow(c, "quit", L("Quit"), L("SimpleToken keeps running in the menu bar when the window is closed"), func() {
-			if p.button(c, "q", L("Quit SimpleToken"), "", btnPlain).Clicked() {
-				mygo.App.Quit()
-			}
-		})
-	})
-}
-
-func (a *ctrl) setAppearance(c *ui.Context, p palette) {
-	s := &a.m.s
-	p.sGroup(c, "theme", L("Theme"), nil, func() {
-		a.segRow(c, p, "theme", L("Appearance"), "", &s.Theme, [][2]string{{"dark", "Dark"}, {"light", "Light"}, {"system", "System"}})
-		p.sRow(c, "pal", L("Palette"), L("Shared with SimpleToggle: one signal colour marks what is live, focused or over a limit"), func() {
-			for _, id := range palettes {
-				sw := newPalette(true, id)
-				sel := Pal(s.Palette) == id
-				b := ui.Box(c.Key(string(id))).Size(30, 30).Radius(6).Background(sw.BG).Label(L(string(id))).Tooltip(palName(id))
-				b.Border(pick(sel, float32(2), 1), pick(sel, p.T1, p.L3))
-				b.Draw(func(pt *ui.Painter, r ui.Rect) {
-					d := ui.Rect{X: r.X + r.W/2 - 4, Y: r.Y + r.H/2 - 4, W: 8, H: 8}
-					pt.Shadow(d, 4, 0, 0, 6, 0, sw.glow())
-					pt.Fill(d, sw.Sig, 4)
-				})
-				pressPose(b, 0.92)
-				if b.Clicked() {
-					s.Palette = string(id)
+	a.columns(c, func() {
+		p.sHead(c, L("Numbers"), L("Axis ticks stay short either way"))
+		a.sGroup(c, p, "numbers", func() {
+			a.sRow(c, p, "exact", L("Token numbers"), "", func() {
+				p.mono(c, pick(s.ExactNumbers, format.Grouped(1094118320), "1.09B"), 11, p.T3)
+				sel := pick(s.ExactNumbers, 1, 0)
+				if n := p.segmented(c, "s", sel, L("Short"), L("Exact")); n != sel {
+					s.ExactNumbers = n == 1
 					a.saveSettings()
 				}
-			}
+			})
+			a.segRow(c, p, "metric", L("Dashboard metric"), L("Also in the top bar"), &s.Metric, [][2]string{{"tokens", "Tokens"}, {"cost", "Cost"}})
 		})
-		a.segRow(c, p, "material", L("Panel material"), L("Glass uses the system vibrancy behind the panel; Solid is opaque"), &s.PanelMaterial, [][2]string{{"glass", "Glass"}, {"solid", "Solid"}})
-	})
-	p.sGroup(c, "charts", L("Charts"), nil, func() {
-		a.segRow(c, p, "series", L("Series colours"), L("Ink: a monochrome ladder ranked by the last 30 days. Vendor: Anthropic terracotta, OpenAI teal, Google indigo, xAI in black and white."), &s.SeriesColors, [][2]string{{"ink", "Ink"}, {"vendor", "Vendor"}})
-		a.segRow(c, p, "marks", L("Vendor marks"), L("Brand logos beside model and tool names, and a thin vendor band on the donut, map and flow"), &s.VendorMarks, [][2]string{{"color", "Colour"}, {"mono", "Mono"}})
+	}, func() {
+		p.sHead(c, L("Window"), "")
+		a.sGroup(c, p, "window", func() {
+			a.toggleRow(c, p, "ontop", L("Keep the window on top"), "", &s.FloatingWindow)
+			a.sRow(c, p, "login", L("Launch at login"), L("macOS may ask you to approve it in System Settings → General → Login Items"), func() {
+				if a.w.login == nil {
+					on := a.loginGet()
+					a.w.login = &on
+				}
+				if p.toggle(c, "t", a.w.login).Changed() {
+					a.loginSet(*a.w.login)
+				}
+			})
+			a.sRow(c, p, "click", L("Clicking the menu bar item opens"), L("⌥-click opens the other one"), func() {
+				sel := pick(s.ClickOpensPanel, 0, 1)
+				if n := p.segmented(c, "s", sel, L("Panel"), L("Window")); n != sel {
+					s.ClickOpensPanel = n == 0
+					a.saveSettings()
+				}
+			})
+			a.sRow(c, p, "quit", L("Quit"), L("SimpleToken stays in the menu bar when the window is closed"), func() {
+				if p.button(c, "q", L("Quit SimpleToken"), "", btnPlain).Clicked() && a.running {
+					mygo.App.Quit()
+				}
+			})
+		})
 	})
 }
 
-func palName(id Pal) string {
-	switch id {
-	case PalPaper:
-		return "Paper"
-	case PalIce:
-		return "Ice"
-	}
-	return "Graphite"
-}
+// ── Menu bar & panel ──
 
 var menuBarItems = [][2]string{
-	{"claude.session", "Claude session limit"}, {"claude.weekly", "Claude weekly limit"}, {"claude.fable", "Claude Fable limit"},
-	{"codex.session", "Codex 5-hour limit"}, {"codex.weekly", "Codex weekly limit"}, {"cursor.weekly", "Cursor weekly limit"},
+	{"claude.session", "Claude session"}, {"claude.weekly", "Claude weekly"}, {"claude.fable", "Claude Fable"},
+	{"codex.session", "Codex 5-hour"}, {"codex.weekly", "Codex weekly"}, {"cursor.weekly", "Cursor weekly"},
 	{"today.tokens", "Today's tokens"}, {"today.cost", "Today's cost"}, {"month.cost", "This month's cost"},
-	{"claude.reset", "Session reset countdown"}, {"today.hours", "Today by hour (Claude Code)"}, {"week.days", "Last 7 days"},
+	{"claude.reset", "Session reset"}, {"today.hours", "Today by hour"}, {"week.days", "Last 7 days"},
 }
 
-// orderedList edits an ordered selection: numbered rows with up / down / remove, and an Add menu.
-func (a *ctrl) orderedList(c *ui.Context, p palette, key string, items *[]string, all [][2]string, empty string) {
-	label := func(k string) string {
+// itemColor is a menu bar item's or panel section's mark colour in the lists.
+func (a *ctrl) itemColor(p palette, id string) ui.Color {
+	prov, _, _ := cutDot(id)
+	switch prov {
+	case "claude", "codex", "cursor":
+		if id != "claude.reset" {
+			return a.m.vendorTint(p, prov)
+		}
+	case "today", "week":
+		return a.accent(p, "stat.average")
+	case "month":
+		return a.accent(p, "cost")
+	}
+	return p.Ink[2]
+}
+
+// orderList edits an ordered, switchable selection: every option is a row with a grip (drag to reorder) and a
+// switch; the switched-on rows come first, in their order. limit caps how many can be on (0: no cap).
+func (a *ctrl) orderList(c *ui.Context, p palette, key string, items *[]string, all [][2]string, limit int, mark func(id string)) {
+	rows := slices.Clone(*items)
+	for _, x := range all {
+		if !slices.Contains(rows, x[0]) {
+			rows = append(rows, x[0])
+		}
+	}
+	label := func(id string) string {
 		for _, x := range all {
-			if x[0] == k {
+			if x[0] == id {
 				return L(x[1])
 			}
 		}
-		return k
+		return id
 	}
-	ui.Column(c.Key(key)).Width(340).Gap(2).Padding(10, 0).Children(func() {
-		if len(*items) == 0 {
-			p.mono(c, empty, 11, p.T4)
-		}
-		for i, k := range slices.Clone(*items) {
-			ui.Row(c.Key(k)).FillWidth().Height(28).Padding(0, 4).Gap(4).AlignItems(ui.Center).Children(func() {
-				ui.Text(c, pad2(i+1)).Font(monoFont).FontSize(10.5).TextColor(p.T4).Width(22).SingleLine()
-				ui.Text(c, label(k)).FontSize(12).TextColor(p.T1).Grow(1).SingleLine()
-				if p.iconBtn(c, "up", "chevron-up", L("Move Up"), false).Clicked() && i > 0 {
-					(*items)[i-1], (*items)[i] = (*items)[i], (*items)[i-1]
+	ui.Column(c.Key(key)).Width(260).Children(func() {
+		for i, id := range rows {
+			on := slices.Contains(*items, id)
+			r := ui.Row(c.Key(id)).FillWidth().Height(34).Gap(10).AlignItems(ui.Center)
+			if on {
+				r.Drag("o:" + id)
+			}
+			if got, ok := ui.Drop[string](r); ok && on && strings.HasPrefix(got, "o:") {
+				from := strings.TrimPrefix(got, "o:")
+				if from != id {
+					list := slices.DeleteFunc(slices.Clone(*items), func(x string) bool { return x == from })
+					list = slices.Insert(list, slices.Index(list, id), from)
+					*items = list
 					a.saveSettings()
 				}
-				if p.iconBtn(c, "down", "chevron-down", L("Move Down"), false).Clicked() && i < len(*items)-1 {
-					(*items)[i+1], (*items)[i] = (*items)[i], (*items)[i+1]
-					a.saveSettings()
+			}
+			if _, over := ui.DragOver[string](r); over && on {
+				r.Background(p.L1)
+			}
+			r.Children(func() {
+				if i > 0 {
+					ui.Box(c).Absolute().Left(0).Top(0).FillWidth().Height(1).Background(p.L2)
 				}
-				if p.iconBtn(c, "rm", "minus", L("Remove"), false).Clicked() {
-					*items = slices.DeleteFunc(*items, func(x string) bool { return x == k })
+				ui.Box(c).Opacity(pick(on, float32(1), 0.4)).Children(func() { grip(c, p) })
+				mark(id)
+				ui.Text(c, label(id)).FontSize(12).TextColor(pick(on, p.T1, p.T2)).Grow(1).SingleLine().Ellipsis("…")
+				v := on
+				if p.toggleCompact(c, "t", &v).Changed() {
+					switch {
+					case v && (limit == 0 || len(*items) < limit):
+						*items = append(*items, id)
+					case !v:
+						*items = slices.DeleteFunc(*items, func(x string) bool { return x == id })
+					}
 					a.saveSettings()
 				}
 			})
 		}
-		add := p.button(c, "add", L("Add"), "plus", btnGhost)
-		add.Menu(func(m *ui.Menu) {
-			n := 0
-			for _, x := range all {
-				if slices.Contains(*items, x[0]) {
-					continue
-				}
-				n++
-				if m.Item(L(x[1])).Chosen() {
-					*items = append(*items, x[0])
-					a.saveSettings()
-				}
-			}
-			if n == 0 {
-				m.Item(L("Everything is added")).Disabled(true)
-			}
-		})
 	})
 }
 
 func (a *ctrl) setMenuBar(c *ui.Context, p palette) {
 	s := &a.m.s
-	p.sGroup(c, "preview", L("Preview"), nil, func() {
-		ui.Column(c.Key("strips")).FillWidth().Gap(8).Padding(12, 0).Children(func() {
-			for _, dark := range []bool{true, false} {
-				png, tmpl := renderMenuBar(a.menuBarSegs(), mbOpts{Style: mbStyle(s.MenuBarStyle), Labels: s.MenuBarShowLabels || s.MenuBarStyle == "stacked",
-					Pace: s.MenuBarShowPace, Icon: s.MenuBarShowIcon, Red: s.MenuBarAlertColor, Dark: dark, Preview: true})
-				a.menuBarPreview(c, pick(dark, "dark", "light"), png, tmpl, dark)
-			}
+	a.columns(c, func() {
+		p.sHead(c, L("Menu bar"), L("One image, tinted by macOS"))
+		ui.Row(c.Key("preview")).FillWidth().Height(30).Padding(0, 12).Gap(14).Radius(6).Background(ui.Hex("#1d1d1d")).Border(1, p.L2).
+			AlignItems(ui.Center).Children(func() {
+			ui.Text(c, L("PREVIEW")).Font(monoFont).FontSize(10).TextColor(ui.RGBA(255, 255, 255, 0.3)).Grow(1).SingleLine()
+			png, tmpl := renderMenuBar(a.menuBarSegs(), a.mbOptions(true, true))
+			a.menuBarPreview(c, "img", png, tmpl, true)
+			p.mono(c, format.Weekday(a.m.now())+" "+format.Clock(a.m.now()), 12, ui.Hex("#ffffff"))
 		})
-	})
-	p.sGroup(c, "items", L("Items"), nil, func() {
-		a.orderedList(c, p, "list", &s.MenuBarItems, menuBarItems, L("Icon only"))
-	})
-	p.sGroup(c, "style", L("Style"), nil, func() {
-		ui.Grid(c.Key("gallery")).FillWidth().Columns(3).Gap(8).Padding(12, 0).Children(func() {
-			for _, st := range [][2]string{{"text", "Single line"}, {"stacked", "Two lines"}, {"dense", "Compact"}, {"ring", "Ring"}, {"rings", "Nested rings"}, {"bar", "Bar"}} {
-				sel := s.MenuBarStyle == st[0]
-				card := ui.Column(c.Key(st[0])).Padding(10).Gap(8).Radius(6).Label(L(st[1]))
-				card.Border(1, pick(sel, p.sigLine(), p.L2)).Background(pick(sel, p.sigSoft(), ui.Transparent))
-				pressPose(card, 0.98)
-				card.Children(func() {
-					png, _ := renderMenuBar(a.menuBarSegs(), mbOpts{Style: mbStyle(st[0]), Labels: s.MenuBarShowLabels || st[0] == "stacked", Pace: s.MenuBarShowPace, Icon: s.MenuBarShowIcon, Red: false, Dark: true, Preview: true})
-					a.menuBarPreview(c, "img", png, true, true)
-					p.mono(c, L(st[1]), 11, p.T1)
+		a.sGroup(c, p, "mb", func() {
+			a.segRow(c, p, "style", L("Style"), L("Gauge glyph, plain numbers, or today's hours as bars"), &s.MenuBarStyle, [][2]string{{"gauge", "Gauge"}, {"numbers", "Numbers"}, {"bars", "Bars"}})
+			a.sRow(c, p, "items", L("Items"), L("Up to three, left to right. Drag to reorder."), func() {
+				a.orderList(c, p, "list", &s.MenuBarItems, menuBarItems, 3, func(id string) { swatch(c, a.itemColor(p, id), 7) })
+			})
+			a.thresholdRow(c, p)
+			a.toggleRow(c, p, "reset", L("Show reset countdown"), L("Adds “2h 12m” after a session value"), &s.MenuBarShowReset)
+		})
+	}, func() {
+		p.sHead(c, L("Drop-down panel"), L("Opens on click · ⌥-click opens the window"))
+		a.sGroup(c, p, "panel", func() {
+			a.sRow(c, p, "sections", L("Sections"), L("Shown top to bottom"), func() {
+				a.orderList(c, p, "list", &s.PanelSections, panelSections, 0, func(id string) {
+					switch id {
+					case "claude", "codex", "cursor":
+						logo(c, vendorLogo(id), 12, a.itemColor(p, id))
+					default:
+						swatch(c, a.itemColor(p, id), 7)
+					}
 				})
-				if card.Clicked() {
-					s.MenuBarStyle = st[0]
-					a.saveSettings()
-				}
-			}
+			})
+			a.segRow(c, p, "lstyle", L("Limit style"), L("Gauges show all three marks; bars fit more windows"), &s.PanelLimitStyle, [][2]string{{"gauges", "Gauges"}, {"meters", "Bars"}})
+			a.intSeg(c, p, "rows", L("Rows per list"), L("Today's models and tools"), &s.PanelListCount, []int{3, 5, 0}, func(v int) string { return pick(v == 0, L("All"), itoa(v)) })
+			a.segRow(c, p, "material", L("Material"), L("Glass follows the desktop; solid keeps contrast steady"), &s.PanelMaterial, [][2]string{{"glass", "Glass"}, {"solid", "Solid"}})
 		})
 	})
-	p.sGroup(c, "details", L("Details"), nil, func() {
-		a.toggleRow(c, p, "labels", L("Show labels"), pick(s.MenuBarStyle == "stacked", L("Two lines always shows labels"), ""), &s.MenuBarShowLabels)
-		a.toggleRow(c, p, "pace", L("Pace and projection"), L("Ring, nested rings and bar: a pace tick and how far the current pace will go"), &s.MenuBarShowPace)
-		a.toggleRow(c, p, "icon", L("Show SimpleToken icon"), "", &s.MenuBarShowIcon)
-		p.sRow(c, "used", L("Limit numbers"), "", func() {
-			sel := pick(s.LimitShowUsed, 0, 1)
-			if n := p.segmented(c, "s", sel, L("Used"), L("Left")); n != sel {
-				s.LimitShowUsed = n == 0
-				a.saveSettings()
-			}
+}
+
+// thresholdRow is the alert threshold: a slider from 50 to 100 %, past it the red that values turn.
+func (a *ctrl) thresholdRow(c *ui.Context, p palette) {
+	s := &a.m.s
+	a.sRow(c, p, "thr", L("Alert threshold"), L("Over it, the item turns red and a notification posts once per window"), func() {
+		v := s.TopThreshold()
+		sl := ui.SliderBase(c.Key("sl"), &v, 50, 100).Size(200, 20).Label(L("Alert threshold"))
+		sl.Draw(func(pt *ui.Painter, r ui.Rect) {
+			f := float32((v - 50) / 50)
+			y := r.Y + r.H/2 - 1
+			pt.Fill(ui.Rect{X: r.X, Y: y, W: r.W, H: 2}, p.L3, 1)
+			pt.Fill(ui.Rect{X: r.X, Y: y, W: r.W * f, H: 2}, p.T1, 1)
+			pt.Fill(ui.Rect{X: r.X + r.W*f, Y: y, W: r.W * (1 - f), H: 2}, alpha(p.Red, 0.5), 0)
+			pt.Fill(ui.Rect{X: r.X + r.W*f - 7, Y: r.Y + r.H/2 - 7, W: 14, H: 14}, p.FG, 7)
 		})
-		a.toggleRow(c, p, "red", L("Turn red near the limit"), L("The item stays a template image until a value passes the top alert threshold"), &s.MenuBarAlertColor)
-		p.sRow(c, "click", L("Clicking the icon opens"), L("Right-click shows Open, Settings, Refresh and Quit"), func() {
-			sel := pick(s.ClickOpensPanel, 0, 1)
-			if n := p.segmented(c, "s", sel, L("Panel"), L("Main window")); n != sel {
-				s.ClickOpensPanel = n == 0
-				a.saveSettings()
+		if sl.Changed() {
+			t := math.Round(v/5) * 5
+			s.AlertThresholds = []float64{t}
+			if t < 95 {
+				s.AlertThresholds = append(s.AlertThresholds, 95)
 			}
-		})
+			a.saveSettings()
+		}
+		p.mono(c, itoa(int(v))+"%", 12, p.T1).Width(36)
 	})
+}
+
+// mbOptions are the renderer's options from the settings.
+func (a *ctrl) mbOptions(dark, preview bool) mbOpts {
+	s := a.m.s
+	return mbOpts{Style: mbStyle(s.MenuBarStyle), Pace: s.MenuBarShowPace, Icon: s.MenuBarShowIcon, Red: s.MenuBarAlertColor, Dark: dark, Preview: preview}
 }
 
 // menuBarPreview shows a rendered item on a strip of the bar's colour (a template image is tinted like macOS does).
 func (a *ctrl) menuBarPreview(c *ui.Context, key string, png []byte, tmpl, dark bool) {
 	bmp, err := a.w.bitmap(png)
 	ink := pick(dark, ui.Hex("#ffffff"), ui.Hex("#111111"))
-	ui.Row(c.Key(key)).FillWidth().Height(30).Radius(5).Background(pick(dark, ui.Hex("#1c1c1e"), ui.Hex("#ececec"))).Justify(ui.Center).AlignItems(ui.Center).Children(func() {
+	ui.Row(c.Key(key)).Height(22).Padding(0, 7).Radius(4).Background(ui.RGBA(255, 255, 255, 0.08)).Justify(ui.Center).AlignItems(ui.Center).Children(func() {
 		if err != nil || bmp == nil {
 			return
 		}
 		w, h := bmp.Size()
-		dw := float32(w) / 2
-		ui.Box(c).Size(dw, float32(h)/2).Draw(func(pt *ui.Painter, r ui.Rect) {
+		ui.Box(c).Size(float32(w)/2, float32(h)/2).Draw(func(pt *ui.Painter, r ui.Rect) {
 			o := ui.ImageOptions{}
 			if tmpl {
 				o.Tint = ink
@@ -339,58 +410,23 @@ func (a *ctrl) menuBarPreview(c *ui.Context, key string, png []byte, tmpl, dark 
 	})
 }
 
-func (a *ctrl) setPanel(c *ui.Context, p palette) {
-	s := &a.m.s
-	p.sGroup(c, "sections", L("Sections"), nil, func() {
-		a.orderedList(c, p, "list", &s.PanelSections, panelSections, L("Only the header row is shown"))
-	})
-	p.sGroup(c, "layout", L("Layout"), nil, func() {
-		a.intSeg(c, p, "width", L("Panel width"), "", &s.PanelWidth, []int{320, 360, 400}, func(v int) string {
-			return map[int]string{320: L("Compact"), 360: L("Standard"), 400: L("Wide")}[v]
-		})
-		a.segRow(c, p, "lstyle", L("Limit style"), L("Meters are denser; dot gauges echo the app icon"), &s.PanelLimitStyle, [][2]string{{"meters", "Meters"}, {"gauges", "Dot gauges"}})
-		a.toggleRow(c, p, "resets", L("Show reset times"), "", &s.PanelShowResets)
-		a.segRow(c, p, "trend", L("Today's trend"), "", &s.PanelTodayStyle, [][2]string{{"cumulative", "Cumulative line"}, {"bars", "Hourly bars"}})
-		a.intSeg(c, p, "rows", L("Models / tools shown"), "", &s.PanelListCount, []int{3, 4, 6}, itoa)
-	})
-}
+// ── Dashboard ──
 
-func (a *ctrl) setWidgets(c *ui.Context, p palette) {
+func (a *ctrl) setDashboard(c *ui.Context, p palette) {
 	s := &a.m.s
-	right := func() {
-		if p.button(c, "rl", L("Reset Layout Only"), "", btnGhost).Clicked() {
-			d := settings.Default()
-			s.CardOrder, s.HiddenCards, s.CardSizes = d.CardOrder, d.HiddenCards, d.CardSizes
-			a.saveSettings()
-		}
-		if p.button(c, "ra", L("Reset All Widget Settings"), "", btnGhost).Clicked() {
-			d := settings.Default()
-			s.CardOrder, s.HiddenCards, s.CardSizes, s.CardAccents = d.CardOrder, d.HiddenCards, d.CardSizes, d.CardAccents
-			s.HeroShowPrevious, s.UsageStack, s.UsageShowAverage, s.PunchcardDays = d.HeroShowPrevious, d.UsageStack, d.UsageShowAverage, d.PunchcardDays
-			s.CalendarMetric, s.CalendarWeeks, s.CompositionPeriod, s.CompositionShowHitRate = d.CalendarMetric, d.CalendarWeeks, d.CompositionPeriod, d.CompositionShowHitRate
-			s.CostShowLastMonth, s.CostShowProjection, s.CostShowDailyBars, s.ModelsShowSparklines, s.ModelsMetric = d.CostShowLastMonth, d.CostShowProjection, d.CostShowDailyBars, d.ModelsShowSparklines, d.ModelsMetric
-			a.saveSettings()
-		}
-	}
-	p.sGroup(c, "widgets", L("Widgets"), right, func() {
-		for i, id := range slices.Clone(s.CardOrder) {
-			def := cardDefs[id]
-			ui.Row(c.Key(id)).FillWidth().Padding(6, 0).Gap(10).AlignItems(ui.Center).Children(func() {
-				ui.Text(c, pad2(i+1)).Font(monoFont).FontSize(10.5).TextColor(p.T4).Width(22).SingleLine()
-				on := !slices.Contains(s.HiddenCards, id)
-				ui.Text(c, L(def.Title)).FontSize(12.5).TextColor(pick(on, p.T1, p.T3)).Grow(1).SingleLine()
-				if len(def.Sizes) > 1 {
-					cur := a.cardSize(id)
-					opts := make([]string, len(def.Sizes))
-					sel := 0
-					for k, sz := range def.Sizes {
-						opts[k] = string(sz)
-						if sz == cur {
-							sel = k
-						}
-					}
-					if n := p.segmented(c, "size", sel, opts...); n != sel {
-						a.setCardSize(id, def.Sizes[n])
+	p.sHead(c, L("Widgets"), L("Order, size and visibility; each widget's own options are on its back"))
+	ui.Box(c).Height(12)
+	a.sGroup(c, p, "widgets", func() {
+		for _, id := range slices.Clone(s.CardOrder) {
+			def, ok := cardDefs[id]
+			if !ok {
+				continue
+			}
+			on := !slices.Contains(s.HiddenCards, id)
+			a.sRow(c, p, id, L(def.Title), "", func() {
+				for _, sz := range def.Sizes {
+					if p.chip(c, "sz"+string(sz), string(sz), sz == a.cardSize(id)).Tooltip(sizeName(sz)).Clicked() {
+						a.setCardSize(id, sz)
 					}
 				}
 				if p.iconBtn(c, "up", "chevron-up", L("Move Earlier"), false).Clicked() {
@@ -402,106 +438,74 @@ func (a *ctrl) setWidgets(c *ui.Context, p palette) {
 				v := on
 				if p.toggle(c, "on", &v).Changed() {
 					if v {
-						s.HiddenCards = slices.DeleteFunc(s.HiddenCards, func(x string) bool { return x == id })
+						a.showCard(id)
 					} else {
-						s.HiddenCards = append(s.HiddenCards, id)
+						a.hideCard(id)
 					}
-					a.saveSettings()
 				}
 			})
+		}
+	})
+	ui.Row(c.Key("reset")).Gap(8).Padding(12, 0).Children(func() {
+		if p.button(c, "rl", L("Reset layout"), "", btnPlain).Clicked() {
+			d := settings.Default()
+			s.CardOrder, s.HiddenCards, s.CardSizes = d.CardOrder, d.HiddenCards, d.CardSizes
+			a.saveSettings()
+		}
+		if p.button(c, "ra", L("Reset every widget option"), "", btnGhost).Clicked() {
+			d := settings.Default()
+			s.CardOrder, s.HiddenCards, s.CardSizes, s.CardAccents = d.CardOrder, d.HiddenCards, d.CardSizes, d.CardAccents
+			s.HeroShowPrevious, s.UsageStack, s.UsageShowAverage, s.PunchcardDays = d.HeroShowPrevious, d.UsageStack, d.UsageShowAverage, d.PunchcardDays
+			s.CalendarMetric, s.CalendarWeeks, s.CompositionPeriod, s.CompositionShowHitRate = d.CalendarMetric, d.CalendarWeeks, d.CompositionPeriod, d.CompositionShowHitRate
+			s.CostShowLastMonth, s.CostShowProjection, s.CostShowDailyBars, s.ModelsShowSparklines, s.ModelsMetric = d.CostShowLastMonth, d.CostShowProjection, d.CostShowDailyBars, d.ModelsShowSparklines, d.ModelsMetric
+			a.saveSettings()
 		}
 	})
 }
 
-func (a *ctrl) setModels(c *ui.Context, p palette) {
-	m := a.m
-	s := &m.s
-	rep := m.report("ALL", "tokens")
-	p.sGroup(c, "models", L("Models"), nil, func() {
-		a.segRow(c, p, "scheme", L("Color scheme"), L("Ranked by the last 30 days, never the selected range"), &s.SeriesColors, [][2]string{{"ink", "Ink"}, {"vendor", "By vendor"}})
-		p.sRow(c, "sep", L("Models shown separately"), L("The rest are grouped as Other"), func() {
-			if p.iconBtn(c, "minus", "minus", L("Fewer"), false).Clicked() && s.SeparateModels > 2 {
-				s.SeparateModels--
-				a.saveSettings()
-			}
-			ui.Text(c, itoa(s.SeparateModels)).Font(monoFont).FontSize(13).TextColor(p.T1).Width(18).TextAlign(ui.Center)
-			if p.iconBtn(c, "plus", "plus", L("More"), false).Clicked() && s.SeparateModels < 8 {
-				s.SeparateModels++
-				a.saveSettings()
-			}
-		})
-		models := make([]string, 0, len(rep.Models))
-		for _, sh := range rep.Models {
-			models = append(models, sh.Key)
-		}
-		for _, x := range s.ExcludedModels {
-			if !slices.Contains(models, x) {
-				models = append(models, x)
-			}
-		}
-		for _, id := range models {
-			var tokens int64
-			last := ""
-			for _, sh := range rep.Models {
-				if sh.Key == id {
-					tokens = sh.Tokens
+// ── Limits ──
+
+func (a *ctrl) setLimits(c *ui.Context, p palette) {
+	s := &a.m.s
+	a.columns(c, func() {
+		p.sHead(c, L("Limits"), L("Probed every few minutes while something shows them"))
+		a.sGroup(c, p, "providers", func() {
+			for _, prov := range limits.Providers {
+				e := a.lim.Get(prov)
+				detail := a.statusText(e)
+				if e.Snapshot != nil && e.Snapshot.AccountLabel != "" {
+					detail = e.Snapshot.AccountLabel + " · " + detail
 				}
-			}
-			for i := len(rep.Days) - 1; i >= 0 && last == ""; i-- {
-				if rep.Days[i].ByModel[id] > 0 {
-					last = format.ShortDate(rep.Days[i].Date)
-				}
-			}
-			v := vendorOf(id)
-			inc := !slices.Contains(s.ExcludedModels, id)
-			ui.Row(c.Key(id)).FillWidth().Padding(8, 0).Gap(10).AlignItems(ui.Center).Children(func() {
-				a.colorWell(c, p, s.ModelColorOverrides, id, m.modelColor(p, id))
-				logo(c, vendorLogo(v), 16, m.vendorTint(p, v))
-				ui.Column(c).Grow(1).MinWidth(0).Gap(2).Children(func() {
-					ui.Text(c, id).Font(monoFont).FontSize(12).TextColor(pick(inc, p.T1, p.T3)).SingleLine().Ellipsis("…")
-					p.mono(c, vendorName(v)+" · "+shortNum(float64(tokens))+" · "+L("last used %@", last), 10, p.T4)
-				})
-				alias := s.ModelAliases[id]
-				if ui.TextInput(c.Key("alias"), &alias).Placeholder(L("Alias")).Width(150).Changed() {
-					if strings.TrimSpace(alias) == "" {
-						delete(s.ModelAliases, id)
-					} else {
-						s.ModelAliases[id] = alias
+				show := !slices.Contains(s.HiddenLimitProviders, string(prov))
+				a.sRow(c, p, string(prov), prov.DisplayName(), detail, func() {
+					logo(c, vendorLogo(string(prov)), 14, a.m.vendorTint(p, string(prov)))
+					if p.toggle(c, "t", &show).Changed() {
+						a.setExcluded(&s.HiddenLimitProviders, string(prov), !show)
 					}
+				})
+			}
+			a.claudeKeyRow(c, p)
+		})
+	}, func() {
+		p.sHead(c, L("Gauges and alerts"), "")
+		a.sGroup(c, p, "gauges", func() {
+			a.sRow(c, p, "used", L("Numbers show"), "", func() {
+				sel := pick(s.LimitShowUsed, 0, 1)
+				if n := p.segmented(c, "s", sel, L("Used"), L("Left")); n != sel {
+					s.LimitShowUsed = n == 0
 					a.saveSettings()
 				}
-				if p.toggle(c, "inc", &inc).Changed() {
-					a.setExcluded(&s.ExcludedModels, id, !inc)
+			})
+			a.toggleRow(c, p, "buckets", L("Per-model windows"), L("Adds Fable and other model buckets"), &s.LimitShowModelBuckets)
+			a.toggleRow(c, p, "pace", L("Pace and forecast"), L("The needle for time gone, dim ticks for where usage lands by the reset"), &s.LimitShowPace)
+			a.thresholdRow(c, p)
+			a.toggleRow(c, p, "notif", L("Notify at the alert threshold"), L("Once per window, at the threshold and at 95%"), &s.LimitNotifications)
+			a.sRow(c, p, "refresh", L("Refresh"), "", func() {
+				if p.button(c, "r", L("Refresh Now"), "rotate-cw", btnPlain).Clicked() {
+					a.lim.RefreshNow()
 				}
 			})
-		}
-		ui.Row(c.Key("actions")).Gap(6).Padding(10, 0).Children(func() {
-			if p.button(c, "rc", L("Reset Colors"), "", btnGhost).Clicked() {
-				s.ModelColorOverrides, s.ToolColorOverrides = map[string]string{}, map[string]string{}
-				a.saveSettings()
-			}
-			if p.button(c, "ra", L("Clear All Aliases"), "", btnGhost).Clicked() {
-				s.ModelAliases = map[string]string{}
-				a.saveSettings()
-			}
 		})
-	})
-	p.sGroup(c, "tools", L("Tools"), nil, func() {
-		for _, sh := range rep.Clients {
-			id := sh.Key
-			inc := !slices.Contains(s.ExcludedClients, id)
-			ui.Row(c.Key(id)).FillWidth().Padding(8, 0).Gap(10).AlignItems(ui.Center).Children(func() {
-				a.colorWell(c, p, s.ToolColorOverrides, id, m.toolColor(p, id))
-				logo(c, vendorLogo(id), 16, m.vendorTint(p, id))
-				ui.Column(c).Grow(1).Gap(2).Children(func() {
-					ui.Text(c, toolName(id)).FontSize(12.5).TextColor(pick(inc, p.T1, p.T3)).SingleLine()
-					p.mono(c, L("%@ all time", shortNum(float64(sh.Tokens))), 10, p.T4)
-				})
-				if p.toggle(c, "inc", &inc).Changed() {
-					a.setExcluded(&s.ExcludedClients, id, !inc)
-				}
-			})
-		}
 	})
 }
 
@@ -513,63 +517,11 @@ func (a *ctrl) setExcluded(list *[]string, id string, excluded bool) {
 	a.saveSettings()
 }
 
-func (a *ctrl) setLimits(c *ui.Context, p palette) {
-	s := &a.m.s
-	p.sGroup(c, "limits", L("Limits"), nil, func() {
-		p.sRow(c, "used", L("Numbers show"), "", func() {
-			sel := pick(s.LimitShowUsed, 0, 1)
-			if n := p.segmented(c, "s", sel, L("Used"), L("Left")); n != sel {
-				s.LimitShowUsed = n == 0
-				a.saveSettings()
-			}
-		})
-		for _, prov := range limits.Providers {
-			e := a.lim.Get(prov)
-			detail := a.statusText(e)
-			if e.Snapshot != nil && e.Snapshot.AccountLabel != "" {
-				detail = e.Snapshot.AccountLabel + " · " + detail
-			}
-			show := !slices.Contains(s.HiddenLimitProviders, string(prov))
-			p.sRow(c, string(prov), L("Show %@", prov.DisplayName()), detail, func() {
-				if p.toggle(c, "t", &show).Changed() {
-					a.setExcluded(&s.HiddenLimitProviders, string(prov), !show)
-				}
-			})
-		}
-		a.claudeKeyRow(c, p)
-		a.toggleRow(c, p, "buckets", L("Per-model extra limits"), L("Fable, Codex model buckets, Cursor on-demand"), &s.LimitShowModelBuckets)
-		a.toggleRow(c, p, "pace", L("Even-pace line"), L("Hollow cells and dots show where the current pace ends"), &s.LimitShowPace)
-		p.sRow(c, "refresh", L("Refresh"), "", func() {
-			if p.button(c, "r", L("Refresh Now"), "rotate-cw", btnPlain).Clicked() {
-				a.lim.RefreshNow()
-			}
-		})
-	})
-	p.sGroup(c, "alerts", L("Alerts"), nil, func() {
-		p.sRow(c, "thr", L("Thresholds"), L("One notification per window period per threshold"), func() {
-			for _, t := range []float64{50, 60, 70, 80, 90, 95} {
-				on := slices.Contains(s.AlertThresholds, t)
-				if p.chip(c, itoa(int(t)), itoa(int(t))+"%", on).Clicked() {
-					if on {
-						s.AlertThresholds = slices.DeleteFunc(s.AlertThresholds, func(x float64) bool { return x == t })
-					} else {
-						s.AlertThresholds = append(s.AlertThresholds, t)
-						slices.Sort(s.AlertThresholds)
-					}
-					a.saveSettings()
-				}
-			}
-		})
-		a.toggleRow(c, p, "notif", L("System notifications"), "", &s.LimitNotifications)
-	})
-}
-
-// claudeKeyRow stores the owner-pasted Claude sessionKey (needed for the Fable and per-model windows). The key is
-// never shown again; only whether one is saved.
+// claudeKeyRow stores the owner-pasted Claude sessionKey. The key is never shown again; only whether one is saved.
 func (a *ctrl) claudeKeyRow(c *ui.Context, p palette) {
 	has := a.creds.ClaudeCookie() != ""
-	p.sRow(c, "key", L("Claude session key"), pick(has, L("Saved. Paste a new one to replace it."), L("Paste sessionKey (sk-ant-…) from claude.ai")), func() {
-		ui.TextInput(c.Key("in"), &a.w.keyDraft).Password().Placeholder("sk-ant-…").Width(220)
+	a.sRow(c, p, "key", L("claude.ai key"), pick(has, L("Saved. Paste a new one to replace it."), L("Paste sessionKey (sk-ant-…) from claude.ai")), func() {
+		ui.TextInput(c.Key("in"), &a.w.keyDraft).Password().Placeholder("sk-ant-…").Width(180)
 		if p.button(c, "save", pick(has, L("Replace"), L("Save")), "", btnPlain).Clicked() && a.w.keyDraft != "" {
 			if _, err := limits.NormalizeSessionKey(a.w.keyDraft); err == nil {
 				_ = a.creds.SetClaudeCookie(a.w.keyDraft)
@@ -584,68 +536,253 @@ func (a *ctrl) claudeKeyRow(c *ui.Context, p palette) {
 	})
 }
 
+// ── Data sources ──
+
 func (a *ctrl) setData(c *ui.Context, p palette) {
-	s := &a.m.s
-	p.sGroup(c, "refresh", L("Refresh"), nil, func() {
-		a.intSeg(c, p, "live", L("Today's usage refresh"), L("Throttled; paused when no window, panel or menu bar number needs it"), &s.LiveRefreshSeconds, []int{15, 30, 60, 120}, fmtr.Seconds)
-		a.intSeg(c, p, "full", L("Full rescan"), "", &s.FullRefreshMinutes, []int{10, 15, 30}, func(v int) string { return L("%lld min", v) })
-		p.sRow(c, "all", L("Refresh All Now"), "", func() {
-			if p.button(c, "r", L("Refresh All Now"), "rotate-cw", btnPlain).Clicked() {
-				a.refreshAll()
+	m := a.m
+	s := &m.s
+	a.columns(c, func() {
+		p.sHead(c, L("Data sources"), L("Read from local logs; nothing leaves this Mac"))
+		a.sGroup(c, p, "refresh", func() {
+			a.intSeg(c, p, "live", L("Live refresh"), L("Throttled while the window or panel is open; paused when nothing is visible"), &s.LiveRefreshSeconds, []int{15, 30, 60}, func(v int) string { return itoa(v) + " s" })
+			a.intSeg(c, p, "full", L("Full rescan"), L("Rebuilds history and syncs Cursor"), &s.FullRefreshMinutes, []int{5, 15, 60}, func(v int) string { return itoa(v) + " m" })
+			a.sRow(c, p, "excluded", L("Excluded"), L("Left out of every number, live and history"), func() { a.excludedChips(c, p) })
+			h := m.d.History
+			since := "—"
+			if len(h) > 0 {
+				since = L("since %@", format.LongDate(h[0].Date))
 			}
+			a.sRow(c, p, "dir", L("History"), "~/Library/Application Support/SimpleToken · "+since, func() {
+				if p.button(c, "show", L("Reveal"), "folder-open", btnPlain).Clicked() && a.running {
+					_ = mygo.Shell.OpenPath(paths.Dir())
+				}
+			})
 		})
-	})
-	p.sGroup(c, "storage", L("Storage"), nil, func() {
-		h := a.m.d.History
-		since := "—"
-		if len(h) > 0 {
-			since = format.LongDate(h[0].Date)
-		}
-		p.sRow(c, "hist", L("History"), L("Daily totals per tool and model"), func() { p.mono(c, L("%lld days", len(h))+" · "+since, 12, p.T1) })
-		p.sRow(c, "intra", L("Intraday data"), L("Half-hour Claude Code totals, kept 90 days"), func() { p.mono(c, L("%lld days", len(a.m.d.Intra.Days())), 12, p.T1) })
-		p.sRow(c, "dir", L("Data folder"), "~/Library/Application Support/SimpleToken", func() {
-			if p.button(c, "show", L("Show in Finder"), "folder-open", btnPlain).Clicked() {
-				_ = mygo.Shell.OpenPath(paths.Dir())
+	}, func() {
+		p.sHead(c, L("Models and tools"), L("Colour, alias and whether it counts"))
+		a.sGroup(c, p, "models", func() { a.modelRows(c, p) })
+		ui.Row(c.Key("actions")).Gap(8).Children(func() {
+			if p.button(c, "rc", L("Reset colours"), "", btnGhost).Clicked() {
+				s.ModelColorOverrides, s.ToolColorOverrides = map[string]string{}, map[string]string{}
+				a.saveSettings()
+			}
+			if p.button(c, "ra", L("Clear aliases"), "", btnGhost).Clicked() {
+				s.ModelAliases = map[string]string{}
+				a.saveSettings()
 			}
 		})
 	})
 }
 
-// cardBack is a card's settings: size, its own options, its colour.
+// excludedChips lists what is left out, each a chip that brings it back, and a menu to leave more out.
+func (a *ctrl) excludedChips(c *ui.Context, p palette) {
+	m := a.m
+	s := &m.s
+	ui.Row(c.Key("chips")).Wrap().Gap(6).MaxWidth(300).Justify(ui.End).Children(func() {
+		for _, id := range s.ExcludedModels {
+			if p.chip(c, "m"+id, m.modelName(id)+" ×", true).Tooltip(L("Count it again")).Clicked() {
+				a.setExcluded(&s.ExcludedModels, id, false)
+			}
+		}
+		for _, id := range s.ExcludedClients {
+			if p.chip(c, "t"+id, toolName(id)+" ×", true).Tooltip(L("Count it again")).Clicked() {
+				a.setExcluded(&s.ExcludedClients, id, false)
+			}
+		}
+		add := p.chip(c, "add", "+ "+L("Exclude…"), false)
+		add.Menu(func(menu *ui.Menu) {
+			rep := m.report("ALL", "tokens")
+			for _, sh := range rep.Clients {
+				if !slices.Contains(s.ExcludedClients, sh.Key) && menu.Item(toolName(sh.Key)).Chosen() {
+					a.setExcluded(&s.ExcludedClients, sh.Key, true)
+				}
+			}
+			menu.Separator()
+			for _, sh := range rep.Models {
+				if !slices.Contains(s.ExcludedModels, sh.Key) && menu.Item(sh.Key).Chosen() {
+					a.setExcluded(&s.ExcludedModels, sh.Key, true)
+				}
+			}
+		})
+	})
+}
+
+// modelRows lists every model and tool with its colour well, alias (models) and include switch.
+func (a *ctrl) modelRows(c *ui.Context, p palette) {
+	m := a.m
+	s := &m.s
+	rep := m.report("ALL", "tokens")
+	for _, sh := range rep.Clients {
+		id := sh.Key
+		inc := !slices.Contains(s.ExcludedClients, id)
+		a.sRow(c, p, "t"+id, toolName(id), L("%@ all time", shortNum(float64(sh.Tokens))), func() {
+			a.colorWell(c, p, s.ToolColorOverrides, id, m.toolColor(p, id))
+			if p.toggleCompact(c, "inc", &inc).Changed() {
+				a.setExcluded(&s.ExcludedClients, id, !inc)
+			}
+		})
+	}
+	for _, sh := range rep.Models {
+		id := sh.Key
+		inc := !slices.Contains(s.ExcludedModels, id)
+		v := vendorOf(id)
+		a.sRow(c, p, "m"+id, id, vendorName(v)+" · "+shortNum(float64(sh.Tokens)), func() {
+			alias := s.ModelAliases[id]
+			if ui.TextInput(c.Key("alias"), &alias).Placeholder(L("Alias")).Width(120).Changed() {
+				if strings.TrimSpace(alias) == "" {
+					delete(s.ModelAliases, id)
+				} else {
+					s.ModelAliases[id] = alias
+				}
+				a.saveSettings()
+			}
+			a.colorWell(c, p, s.ModelColorOverrides, id, m.modelColor(p, id))
+			if p.toggleCompact(c, "inc", &inc).Changed() {
+				a.setExcluded(&s.ExcludedModels, id, !inc)
+			}
+		})
+	}
+}
+
+// ── Appearance ──
+
+func palName(id Pal) string {
+	switch id {
+	case PalPaper:
+		return "Paper"
+	case PalIce:
+		return "Ice"
+	}
+	return "Graphite"
+}
+
+func (a *ctrl) setAppearance(c *ui.Context, p palette) {
+	s := &a.m.s
+	a.columns(c, func() {
+		p.sHead(c, L("Model colours"), L("Colour follows the model, by its rank over the last 30 days — never the selected range"))
+		a.sGroup(c, p, "colours", func() {
+			a.sRow(c, p, "series", L("Series"), L("Vendor colours, or the ink ladder"), func() {
+				if p.segValue(c, "s", &s.SeriesColors, [][2]string{{"vendor", L("Colour")}, {"ink", L("Ink")}}) {
+					a.saveSettings()
+				}
+			})
+			a.sRow(c, p, "families", L("Families"), L("opus · sonnet · gpt / codex · gemini · haiku · fable; the rest Other"), func() {
+				for _, col := range []ui.Color{p.Model.Opus, p.Model.Sonnet, p.Model.Codex, p.Model.Gemini, p.Model.Haiku, p.Model.Fable, p.Model.Other} {
+					swatch(c, col, 12)
+				}
+			})
+			a.sRow(c, p, "accents", L("Card accents"), L("For cards that draw one series, each with a validated 4-step ramp"), func() {
+				for _, r := range [][4]ui.Color{p.Accent.SlateR, p.Accent.ClayR, p.Accent.VioletR} {
+					ui.Row(c.Key(hexColor(r[0]))).Gap(2).Children(func() {
+						for _, col := range r {
+							swatch(c, col, 10)
+						}
+					})
+				}
+			})
+			a.segRow(c, p, "marks", L("Brand logos"), L("Always mono, tinted by the vendor colour"), &s.VendorMarks, [][2]string{{"color", "Colour"}, {"mono", "Mono"}})
+		})
+	}, func() {
+		p.sHead(c, L("Display"), "")
+		a.sGroup(c, p, "display", func() {
+			a.segRow(c, p, "theme", L("Appearance"), L("Follows macOS unless set"), &s.Theme, [][2]string{{"system", "System"}, {"dark", "Dark"}, {"light", "Light"}})
+			a.sRow(c, p, "pal", L("Interface palette"), L("SimpleToggle's themes; Graphite keeps the chrome neutral"), func() {
+				for _, id := range palettes {
+					sw := newPalette(p.Dark, id)
+					sel := Pal(s.Palette) == id
+					b := ui.Column(c.Key(string(id))).Gap(4).AlignItems(ui.Center).Label(palName(id))
+					b.Children(func() {
+						ui.Box(c.Key("sw")).Size(34, 24).Radius(5).Background(sw.BG).Border(pick(sel, float32(1.5), 1), pick(sel, p.T1, p.L3)).Draw(func(pt *ui.Painter, r ui.Rect) {
+							pt.Fill(ui.Rect{X: r.X + 6, Y: r.Y + 6, W: r.W - 12, H: r.H - 12}, sw.Surf, 3)
+							pt.Fill(ui.Rect{X: r.X + r.W - 12, Y: r.Y + r.H/2 - 2, W: 4, H: 4}, sw.Sig, 2)
+						})
+						p.mono(c, palName(id), 10.5, pick(sel, p.T1, p.T3))
+					})
+					pressPose(b, 0.94)
+					if b.Clicked() {
+						s.Palette = string(id)
+						a.saveSettings()
+					}
+				}
+			})
+			a.sRow(c, p, "numbers", L("Numbers"), L("Axis ticks stay short either way"), func() {
+				p.mono(c, pick(s.ExactNumbers, format.Grouped(1094118320), "1.09B"), 11, p.T3)
+				sel := pick(s.ExactNumbers, 1, 0)
+				if n := p.segmented(c, "s", sel, L("Short"), L("Exact")); n != sel {
+					s.ExactNumbers = n == 1
+					a.saveSettings()
+				}
+			})
+		})
+	})
+}
+
+// ── Updates ──
+
+func (a *ctrl) setUpdates(c *ui.Context, p palette) {
+	p.sHead(c, L("Updates"), L("Signed, checked and installed in the background"))
+	ui.Box(c).Height(12)
+	ui.Column(c.Key("u")).MaxWidth(620).FillWidth().Children(func() {
+		a.sGroup(c, p, "updates", func() { a.updateRows(c, p) })
+	})
+}
+
+// updateRows are the update settings: automatic install, check now, restart once a version is installed.
+func (a *ctrl) updateRows(c *ui.Context, p palette) {
+	s := &a.m.s
+	if !a.running {
+		a.toggleRow(c, p, "auto", L("Automatic updates"), "", &s.AutoUpdate)
+		return
+	}
+	enabled := mygo.Updater.Enabled()
+	detail := L("Version %@", mygo.App.Version())
+	if !enabled {
+		detail += " · " + L("This build does not update itself")
+	}
+	a.toggleRow(c, p, "auto", L("Automatic updates"), detail, &s.AutoUpdate)
+	if !enabled {
+		return
+	}
+	busy, ready, checked, errText := a.upd.state()
+	status := L("Not checked yet")
+	switch {
+	case busy:
+		status = L("Checking…")
+	case ready != "":
+		status = L("Version %@ is ready", ready)
+	case errText != "":
+		status = errText
+	case !checked.IsZero():
+		status = L("Up to date") + " · " + fmtr.Ago(checked, a.m.now())
+	}
+	a.sRow(c, p, "check", pick(ready != "", L("Restart to update"), L("Check for updates")), status, func() {
+		if ready != "" {
+			if p.button(c, "restart", L("Restart to update"), "rotate-cw", btnPrimary).Clicked() {
+				mygo.App.Relaunch()
+			}
+			return
+		}
+		if p.button(c, "now", L("Check now"), "", btnPlain).Clicked() && !busy {
+			go a.installUpdate()
+		}
+	})
+}
+
+// ── Card backs ──
+
+// cardBack is a card's options (designs/simpletoken-v3 Edit board): its own settings, then its accent and size.
 func (a *ctrl) cardBack(c *ui.Context, p palette, pl placed) {
 	m := a.m
 	s := &m.s
 	def := cardDefs[pl.id]
 	ui.Scroll(c.Key("opts")).Grow(1).FillWidth().Children(func() {
-		ui.Column(c).FillWidth().Children(func() {
-			if len(def.Sizes) > 1 {
-				p.sRow(c, "size", L("Size"), "", func() {
-					sel := slices.Index(def.Sizes, pl.size)
-					labels := make([]string, len(def.Sizes))
-					for i, sz := range def.Sizes {
-						labels[i] = map[cardSize]string{sizeS: L("Small"), sizeM: L("Medium"), sizeL: L("Large"), sizeW: L("Wide")}[sz]
-					}
-					if n := p.segmented(c, "s", sel, labels...); n != sel && n >= 0 {
-						a.setCardSize(pl.id, def.Sizes[n])
-					}
-				})
-			}
-			series := func() {
-				a.segRow(c, p, "series", L("Series colours"), L("Applies to every chart"), &s.SeriesColors, [][2]string{{"ink", "Ink"}, {"vendor", "Vendor"}})
-			}
+		a.sGroup(c, p, "back", func() {
 			switch pl.id {
 			case "hero":
-				a.segRow(c, p, "metric", L("Metric"), L("Shared with the main metric in General"), &s.Metric, [][2]string{{"tokens", "Tokens"}, {"cost", "Cost"}, {"messages", "Messages"}})
-				a.toggleRow(c, p, "prev", L("Previous period line"), "", &s.HeroShowPrevious)
+				a.segRow(c, p, "metric", L("Metric"), L("Follows the top bar"), &s.Metric, [][2]string{{"tokens", "Tokens"}, {"cost", "Cost"}})
+				a.toggleRow(c, p, "prev", L("Compare with the previous period"), L("Dashed line, same length as the range"), &s.HeroShowPrevious)
 			case "limits":
-				p.sRow(c, "used", L("Numbers show"), "", func() {
-					sel := pick(s.LimitShowUsed, 0, 1)
-					if n := p.segmented(c, "s", sel, L("Used"), L("Left")); n != sel {
-						s.LimitShowUsed = n == 0
-						a.saveSettings()
-					}
-				})
-				p.sRow(c, "providers", L("Providers"), "", func() {
+				a.sRow(c, p, "providers", L("Providers"), "", func() {
 					for _, prov := range limits.Providers {
 						on := !slices.Contains(s.HiddenLimitProviders, string(prov))
 						if p.chip(c, string(prov), prov.DisplayName(), on).Clicked() {
@@ -653,79 +790,68 @@ func (a *ctrl) cardBack(c *ui.Context, p palette, pl placed) {
 						}
 					}
 				})
-				a.toggleRow(c, p, "buckets", L("Per-model extra limits"), "", &s.LimitShowModelBuckets)
-				a.toggleRow(c, p, "pace", L("Even-pace line"), "", &s.LimitShowPace)
-				p.sRow(c, "refresh", L("Refresh Now"), "", func() {
-					if p.button(c, "r", L("Refresh Now"), "rotate-cw", btnPlain).Clicked() {
-						a.lim.RefreshNow()
-					}
-				})
+				a.toggleRow(c, p, "buckets", L("Per-model windows"), "", &s.LimitShowModelBuckets)
+				a.toggleRow(c, p, "pace", L("Pace and forecast"), "", &s.LimitShowPace)
 			case "models":
 				a.segRow(c, p, "share", L("Share by"), "", &s.ModelsMetric, [][2]string{{"tokens", "Tokens"}, {"cost", "Cost"}})
-				a.toggleRow(c, p, "spark", L("Sparklines"), "", &s.ModelsShowSparklines)
-				series()
+				a.toggleRow(c, p, "spark", L("30-day sparklines"), "", &s.ModelsShowSparklines)
 			case "usage":
-				a.segRow(c, p, "stack", L("Stacking"), "", &s.UsageStack, [][2]string{{"model", "By model"}, {"tool", "By tool"}, {"none", "Unstacked"}})
-				a.intSeg(c, p, "interval", L("1D interval"), L("Today and single days, from Claude Code's logs"), &s.IntradayMinutes, []int{60, 30}, func(v int) string {
-					return pick(v == 60, L("Hourly"), L("Every 30 min"))
+				a.segRow(c, p, "stack", L("Stacking"), "", &s.UsageStack, [][2]string{{"model", "By model"}, {"tool", "By tool"}, {"none", "Total"}})
+				a.intSeg(c, p, "interval", L("Today in"), L("From Claude Code's logs"), &s.IntradayMinutes, []int{60, 30}, func(v int) string {
+					return pick(v == 60, L("Hours"), L("Half hours"))
 				})
 				a.toggleRow(c, p, "avg", L("Average line"), "", &s.UsageShowAverage)
-				series()
 			case "calendar":
-				a.segRow(c, p, "metric", L("Shade by"), "", &s.CalendarMetric, [][2]string{{"tokens", "Tokens"}, {"cost", "Cost"}, {"messages", "Messages"}})
-				a.intSeg(c, p, "weeks", L("Show up to"), "", &s.CalendarWeeks, []int{0, 13, 26, 53}, func(v int) string {
-					return map[int]string{0: L("Fill"), 13: L("13 wk"), 26: L("26 wk"), 53: L("1 year")}[v]
+				a.segRow(c, p, "metric", L("Shade by"), "", &s.CalendarMetric, [][2]string{{"tokens", "Tokens"}, {"cost", "Cost"}})
+				a.intSeg(c, p, "weeks", L("Weeks"), "", &s.CalendarWeeks, []int{0, 17, 26, 53}, func(v int) string {
+					return pick(v == 0, L("By size"), itoa(v))
 				})
-			case "punchcard":
-				a.intSeg(c, p, "days", L("Range"), "", &s.PunchcardDays, []int{7, 30, 90}, func(v int) string { return L("%lld days", v) })
 			case "composition":
-				a.segRow(c, p, "period", L("Period"), "", &s.CompositionPeriod, [][2]string{{"auto", "Match range"}, {"today", "Today"}, {"month", "This month"}, {"allTime", "All time"}})
-				a.toggleRow(c, p, "hit", L("Hit rate in center"), "", &s.CompositionShowHitRate)
-				series()
+				a.segRow(c, p, "period", L("Period"), "", &s.CompositionPeriod, [][2]string{{"auto", "Range"}, {"today", "Today"}, {"month", "Month"}, {"allTime", "All"}})
 			case "cost":
 				a.toggleRow(c, p, "proj", L("Month-end projection"), "", &s.CostShowProjection)
-				a.toggleRow(c, p, "last", L("Last month's total line"), "", &s.CostShowLastMonth)
-				a.toggleRow(c, p, "bars", L("Daily cost bars"), "", &s.CostShowDailyBars)
+				a.toggleRow(c, p, "last", L("Last month's marker"), "", &s.CostShowLastMonth)
 			case "tools":
-				series()
 				for _, sh := range m.report("ALL", "tokens").Clients {
 					id := sh.Key
 					inc := !slices.Contains(s.ExcludedClients, id)
-					ui.Row(c.Key("tool-"+id)).FillWidth().Padding(6, 0).Gap(10).AlignItems(ui.Center).Children(func() {
+					a.sRow(c, p, "tool-"+id, toolName(id), "", func() {
 						a.colorWell(c, p, s.ToolColorOverrides, id, m.toolColor(p, id))
-						logo(c, vendorLogo(id), 14, m.vendorTint(p, id))
-						ui.Text(c, toolName(id)).FontSize(12).TextColor(pick(inc, p.T1, p.T3)).Grow(1).SingleLine()
-						if p.toggle(c, "inc", &inc).Changed() {
+						if p.toggleCompact(c, "inc", &inc).Changed() {
 							a.setExcluded(&s.ExcludedClients, id, !inc)
 						}
 					})
 				}
-			case "map", "flow":
-				series()
 			}
-			if pl.id == "hero" || pl.id == "usage" || pl.id == "cost" || pl.id == "calendar" || pl.id == "punchcard" || def.Stat {
-				p.sRow(c, "accent", L("Color"), "", func() {
-					cur := s.CardAccents[pl.id]
-					if cur == "" {
-						cur = "ink"
-					}
+			if cardAccented(pl.id) {
+				a.sRow(c, p, "accent", L("Accent"), L("Single-series cards take their own colour"), func() {
+					cur := a.accentName(pl.id)
 					for _, o := range accentOptions {
-						save := s.CardAccents[pl.id]
+						save, had := s.CardAccents[pl.id]
 						s.CardAccents[pl.id] = o[0]
 						col := a.accent(p, pl.id)
-						s.CardAccents[pl.id] = save
-						if save == "" {
+						if had {
+							s.CardAccents[pl.id] = save
+						} else {
 							delete(s.CardAccents, pl.id)
 						}
-						b := ui.Box(c.Key(o[0])).Size(18, 18).Radius(9).Background(col).Label(L(o[1])).Tooltip(L(o[1]))
+						b := ui.Box(c.Key(o[0])).Size(22, 22).Radius(11).Background(col).Label(L(o[1])).Tooltip(L(o[1]))
 						if cur == o[0] {
-							b.Border(2, p.T1)
-						} else {
-							b.Border(1, p.L3)
+							b.Border(1.5, p.T1)
 						}
+						pressPose(b, 0.92)
 						if b.Clicked() {
 							s.CardAccents[pl.id] = o[0]
 							a.saveSettings()
+						}
+					}
+				})
+			}
+			if len(def.Sizes) > 1 {
+				a.sRow(c, p, "size", L("Size"), L("Each size has its own layout"), func() {
+					for _, sz := range def.Sizes {
+						if p.chip(c, string(sz), string(sz), sz == pl.size).Tooltip(sizeName(sz)).Clicked() {
+							a.setCardSize(pl.id, sz)
 						}
 					}
 				})
@@ -738,12 +864,12 @@ func (a *ctrl) cardBack(c *ui.Context, p palette, pl placed) {
 func (a *ctrl) colorWell(c *ui.Context, p palette, overrides map[string]string, id string, cur ui.Color) {
 	ui.Row(c.Key("color")).Gap(2).AlignItems(ui.Center).Shrink(0).Children(func() {
 		col := cur
-		if ui.ColorWell(c.Key("well"), &col).Label(L("Color")).Size(22, 22).Changed() {
+		if ui.ColorWell(c.Key("well"), &col).Label(L("Colour")).Size(20, 20).Changed() {
 			overrides[id] = hexColor(col)
 			a.saveSettings()
 		}
 		if overrides[id] != "" {
-			if p.iconBtn(c, "reset", "rotate-ccw", L("Restore default color"), false).Clicked() {
+			if p.iconBtn(c, "reset", "rotate-ccw", L("Restore the default colour"), false).Clicked() {
 				delete(overrides, id)
 				a.saveSettings()
 			}
@@ -758,41 +884,4 @@ func hexColor(c ui.Color) string {
 		b[1+2*i], b[2+2*i] = digits[v>>4], digits[v&15]
 	}
 	return string(b)
-}
-
-// updateRows are the update settings: automatic install, check now, restart once a version is installed.
-func (a *ctrl) updateRows(c *ui.Context, p palette) {
-	s := &a.m.s
-	enabled := mygo.Updater.Enabled()
-	detail := L("Version %@", mygo.App.Version())
-	if !enabled {
-		detail += " · " + L("This build does not update itself")
-	}
-	a.toggleRow(c, p, "auto", L("Download and install updates"), detail, &s.AutoUpdate)
-	if !enabled {
-		return
-	}
-	busy, ready, checked, errText := a.upd.state()
-	status := L("Not checked yet")
-	switch {
-	case busy:
-		status = L("Checking…")
-	case ready != "":
-		status = L("Version %@ is installed and runs at the next launch", ready)
-	case errText != "":
-		status = errText
-	case !checked.IsZero():
-		status = L("Up to date") + " · " + fmtr.Ago(checked, a.m.now())
-	}
-	p.sRow(c, "check", L("Updates"), status, func() {
-		if ready != "" {
-			if p.button(c, "restart", L("Restart Now"), "rotate-cw", btnPrimary).Clicked() {
-				mygo.App.Relaunch()
-			}
-			return
-		}
-		if p.button(c, "now", L("Check Now"), "", btnPlain).Clicked() && !busy {
-			go a.installUpdate()
-		}
-	})
 }

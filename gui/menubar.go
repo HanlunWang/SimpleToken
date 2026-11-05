@@ -19,33 +19,31 @@ import (
 
 type mbStyle string
 
+// The three styles of the v3 design.
 const (
-	mbText    mbStyle = "text"    // single line
-	mbStacked mbStyle = "stacked" // label over value
-	mbDense   mbStyle = "dense"   // two items per column
-	mbRing    mbStyle = "ring"    // a ring per limit
-	mbRings   mbStyle = "rings"   // up to three limits nested
-	mbBar     mbStyle = "bar"     // value over a thin bar
+	mbGauge   mbStyle = "gauge"   // the first limit as a tick gauge glyph, then the values
+	mbNumbers mbStyle = "numbers" // the values alone
+	mbBars    mbStyle = "bars"    // today's hours as bars, then the values
 )
 
 // mbSeg is one item: a limit (Pct ≥ 0), a number (Value), or mini bars (Bars).
 type mbSeg struct {
 	Label string
 	Value string
+	After string  // drawn after the value, softer (the session's reset countdown)
 	Pct   float64 // −1 when not a limit
-	Pace  float64 // 0…1, for the pace tick and projection
+	Pace  float64 // 0…1, share of the window gone
 	Hot   bool    // at or over the top alert threshold
 	Bars  []float64
 	Now   int // highlighted bar; bars after it are future (dots)
 }
 
 type mbOpts struct {
-	Style  mbStyle
-	Labels bool
-	Pace   bool
-	Icon   bool
-	Red    bool // turn red near the limit
-	Dark   bool // the menu bar's appearance (only used for the colour image)
+	Style mbStyle
+	Pace  bool
+	Icon  bool
+	Red   bool // turn red near the limit
+	Dark  bool // the menu bar's appearance (only used for the colour image)
 	// Preview draws in the bar's ink instead of a template (Settings previews; macOS tints real templates).
 	Preview bool
 }
@@ -71,23 +69,23 @@ func mbFonts() {
 			face, _ := opentype.NewFace(f, &opentype.FaceOptions{Size: size * mbScale, DPI: 72, Hinting: font.HintingNone})
 			return face
 		}
-		mbFace = load("Geist-Medium.ttf", 13)
-		mbMid = load("Geist-Medium.ttf", 11)
+		mbFace = load("GeistMono-Medium.ttf", 12)
+		mbMid = load("GeistMono-Medium.ttf", 10.5)
 		mbSmall = load("Geist-SemiBold.ttf", 8.5)
 	})
 }
 
 // mbCanvas is an alpha mask per colour role, composed into the final image.
 type mbCanvas struct {
-	ink, alert, dim *image.Alpha
-	w, h            int
-	x               float64 // pen position in pixels
+	ink, alert, dim, soft *image.Alpha // soft: secondary values (62 %); dim: the gauge's rest (35 %)
+	w, h                  int
+	x                     float64 // pen position in pixels
 }
 
 func newMBCanvas(w int) *mbCanvas {
 	h := 18 * mbScale
 	r := image.Rect(0, 0, w, h)
-	return &mbCanvas{ink: image.NewAlpha(r), alert: image.NewAlpha(r), dim: image.NewAlpha(r), w: w, h: h}
+	return &mbCanvas{ink: image.NewAlpha(r), alert: image.NewAlpha(r), dim: image.NewAlpha(r), soft: image.NewAlpha(r), w: w, h: h}
 }
 
 func (cv *mbCanvas) layer(hot, dim bool) *image.Alpha {
@@ -178,168 +176,124 @@ func (cv *mbCanvas) glyph(x float64) float64 {
 	return s
 }
 
+// tickGauge is the limit gauge as a glyph: 22 ticks on a 270° arc, the used ones in ink (the alert red when hot),
+// the rest dim. It is 15 pt wide.
+func (cv *mbCanvas) tickGauge(x float64, s mbSeg, hot bool) float64 {
+	const n = 22
+	size := 15.0 * mbScale
+	k := size / 132 // the board's 132-unit view box
+	cx, cy := x+(60+6)*k, float64(cv.h)/2+(62+6-62)*k-1*mbScale
+	for i := range n {
+		f := float64(i) / (n - 1)
+		a := (135 + 270*f) * math.Pi / 180
+		x0, y0 := cx+43*k*math.Cos(a), cy+43*k*math.Sin(a)
+		x1, y1 := cx+53*k*math.Cos(a), cy+53*k*math.Sin(a)
+		dst := cv.dim
+		if s.Pct > 0 && f*100 <= s.Pct+0.01 {
+			dst = cv.layer(hot, false)
+		}
+		cv.line(dst, x0, y0, x1, y1, 7*k)
+	}
+	return size
+}
+
+// line paints a round-capped segment of width w.
+func (cv *mbCanvas) line(dst *image.Alpha, x0, y0, x1, y1, w float64) {
+	dx, dy := x1-x0, y1-y0
+	l2 := dx*dx + dy*dy
+	cv.coverage(dst, math.Min(x0, x1)-w, math.Min(y0, y1)-w, math.Max(x0, x1)+w, math.Max(y0, y1)+w, func(x, y float64) bool {
+		t := 0.0
+		if l2 > 0 {
+			t = math.Max(0, math.Min(1, ((x-x0)*dx+(y-y0)*dy)/l2))
+		}
+		return math.Hypot(x-(x0+t*dx), y-(y0+t*dy)) <= w/2
+	}, 1)
+}
+
 // renderMenuBar draws the item. It returns the PNG and whether it is a template image.
 func renderMenuBar(segs []mbSeg, o mbOpts) ([]byte, bool) {
 	mbFonts()
 	// Measure with a generous canvas, then crop to the drawn width.
 	cv := newMBCanvas(1600)
 	x := 2.0 * mbScale
-	gap := 7.0 * mbScale
-	if o.Icon || len(segs) == 0 {
+	gap := 6.0 * mbScale
+	mid := float64(cv.h) / 2
+	base := mid + 4.3*mbScale // text baseline for 12 pt in an 18 pt bar
+	firstLimit, bars := -1, -1
+	for i, s := range segs {
+		if s.Pct >= 0 && firstLimit < 0 {
+			firstLimit = i
+		}
+		if len(s.Bars) > 0 && bars < 0 {
+			bars = i
+		}
+	}
+	glyph := false
+	switch {
+	case o.Style == mbGauge && firstLimit >= 0:
+		x += cv.tickGauge(x, segs[firstLimit], segs[firstLimit].Hot && o.Red) + gap
+		glyph = true
+	case o.Style == mbBars && bars >= 0:
+		x += cv.miniBars(x, segs[bars]) + gap
+		glyph = true
+	case o.Icon || len(segs) == 0:
 		x += cv.glyph(x) + 5*mbScale
 	}
-	mid := float64(cv.h) / 2
-	base := mid + 4.6*mbScale // text baseline for 13 pt in an 18 pt bar
-	limitIdx := []int{}
+	n := 0
 	for i, s := range segs {
-		if s.Pct >= 0 {
-			limitIdx = append(limitIdx, i)
-		}
-	}
-	drawRing := func(items []mbSeg, size float64) float64 {
-		cx, cy := x+size/2, mid
-		th := pick(len(items) > 1, 1.8, 2.2) * mbScale
-		for k, it := range items {
-			r := size/2 - th/2 - float64(k)*(th+1.2*mbScale)
-			cv.ring(cv.dim, cx, cy, r, th, 1, 1)
-			cv.ring(cv.layer(it.Hot && o.Red, false), cx, cy, r, th, it.Pct/100, 1)
-			if o.Pace && it.Pace > 0 {
-				a := it.Pace * 2 * math.Pi
-				cv.dot(cv.ink, cx+r*math.Sin(a), cy-r*math.Cos(a), 0.9*mbScale, 1)
+		if len(s.Bars) > 0 {
+			if glyph && i == bars {
+				continue
 			}
+			if n > 0 {
+				x += gap
+			}
+			x += cv.miniBars(x, s)
+			n++
+			continue
 		}
-		return size
-	}
-	piece := func(s mbSeg) float64 {
-		start := x
+		if n > 0 {
+			x += gap
+		}
 		hot := s.Hot && o.Red
-		switch {
-		case len(s.Bars) > 0:
-			maxV := 1e-9
-			for _, v := range s.Bars {
-				maxV = math.Max(maxV, v)
-			}
-			n := len(s.Bars)
-			bw := pick(n > 10, 2.0, 3.2) * mbScale
-			bg := pick(n > 10, 1.0, 1.6) * mbScale
-			h := 13.0 * mbScale
-			top := mid - h/2
-			for i, v := range s.Bars {
-				bx := x + float64(i)*(bw+bg)
-				if n > 10 && i > s.Now {
-					cv.dot(cv.dim, bx+bw/2, top+h-0.7*mbScale, 0.7*mbScale, 1)
-					continue
-				}
-				bh := math.Max(1.2*mbScale, v/maxV*h)
-				cv.rect(cv.layer(false, i != s.Now), bx, top+h-bh, bx+bw, top+h, 0.6*mbScale, 1)
-			}
-			x += float64(n) * (bw + bg)
-		case s.Pct >= 0 && (o.Style == mbRing || o.Style == mbRings):
-			x += drawRing([]mbSeg{s}, 14*mbScale) + 4*mbScale
-			x = x + cv.labelValue(s, o, x, base, hot)
-		case s.Pct >= 0 && o.Style == mbBar:
-			lw := measure(mbMid, labelText(s, o)+s.Value)
-			top := mid - 7*mbScale
-			cv.labelValueFace(mbMid, s, o, x, top+9*mbScale, hot)
-			w := math.Max(lw, 30*mbScale)
-			barY := top + 11.5*mbScale
-			cv.rect(cv.dim, x, barY, x+w, barY+2.5*mbScale, 1.25*mbScale, 1)
-			cv.rect(cv.layer(hot, false), x, barY, x+w*s.Pct/100, barY+2.5*mbScale, 1.25*mbScale, 1)
-			if o.Pace && s.Pace > 0 {
-				px := x + w*s.Pace
-				cv.rect(cv.ink, px-0.5*mbScale, barY-1.5*mbScale, px+0.5*mbScale, barY+4*mbScale, 0.3*mbScale, 1)
-			}
-			x += w
-		case o.Style == mbStacked:
-			lw, vw := measure(mbSmall, s.Label), measure(mbMid, s.Value)
-			w := math.Max(lw, vw)
-			cv.text(mbSmall, s.Label, x+(w-lw)/2, mid-1.5*mbScale, cv.dim)
-			cv.text(mbMid, s.Value, x+(w-vw)/2, mid+8*mbScale, cv.layer(hot, false))
-			x += w
-		default:
-			x += cv.labelValue(s, o, x, base, hot)
+		layer := cv.layer(hot, false)
+		if s.Pct < 0 && !hot {
+			layer = cv.soft
 		}
-		return x - start
-	}
-	switch o.Style {
-	case mbRings:
-		if len(limitIdx) > 0 {
-			items := []mbSeg{}
-			for _, i := range limitIdx[:min(3, len(limitIdx))] {
-				items = append(items, segs[i])
-			}
-			x += drawRing(items, 17*mbScale) + 5*mbScale
-			for k, i := range limitIdx[:min(2, len(limitIdx))] {
-				if k > 0 {
-					x += gap
-				}
-				x += cv.labelValue(segs[i], o, x, base, segs[i].Hot && o.Red)
-			}
-			for _, s := range segs {
-				if s.Pct < 0 {
-					x += gap
-					piece(s)
-				}
-			}
-			break
+		x += cv.text(mbFace, s.Value, x, base, layer)
+		if s.After != "" {
+			x += 4 * mbScale
+			x += cv.text(mbFace, s.After, x, base, cv.soft)
 		}
-		fallthrough
-	default:
-		if o.Style == mbDense {
-			o2 := o
-			o2.Style = mbText
-			for i := 0; i < len(segs); i += 2 {
-				if i > 0 {
-					x += gap
-				}
-				w := 0.0
-				for k, s := range segs[i:min(i+2, len(segs))] {
-					y := mid - 1*mbScale + float64(k)*8.5*mbScale
-					if i+1 >= len(segs) {
-						y = base - 1*mbScale
-					}
-					w = math.Max(w, cv.labelValueFace(mbMid, s, o2, x, y, s.Hot && o.Red))
-				}
-				x += w
-			}
-			break
-		}
-		for i, s := range segs {
-			if i > 0 {
-				if o.Style == mbText && !o.Labels {
-					x += 4 * mbScale
-					cv.text(mbFace, "·", x, base, cv.dim)
-					x += measure(mbFace, "·") + 4*mbScale
-				} else {
-					x += gap
-				}
-			}
-			piece(s)
-		}
+		n++
 	}
 	w := int(math.Ceil(x + 2*mbScale))
 	return composeMenuBar(cv, w, o)
 }
 
-func labelText(s mbSeg, o mbOpts) string {
-	if o.Labels && s.Label != "" {
-		return s.Label + " "
+// miniBars paints a bars item (today by hour, the last 7 days): the current bar in ink, the rest dim, future
+// slots dots.
+func (cv *mbCanvas) miniBars(x float64, s mbSeg) float64 {
+	mid := float64(cv.h) / 2
+	maxV := 1e-9
+	for _, v := range s.Bars {
+		maxV = math.Max(maxV, v)
 	}
-	return ""
-}
-
-func (cv *mbCanvas) labelValue(s mbSeg, o mbOpts, x, base float64, hot bool) float64 {
-	return cv.labelValueFace(mbFace, s, o, x, base, hot)
-}
-
-// labelValueFace draws "label value" (label dimmed) and returns its width.
-func (cv *mbCanvas) labelValueFace(face font.Face, s mbSeg, o mbOpts, x, base float64, hot bool) float64 {
-	w := 0.0
-	if l := labelText(s, o); l != "" {
-		w += cv.text(face, l, x, base, cv.dim)
+	n := len(s.Bars)
+	bw := pick(n > 10, 2.0, 3.2) * mbScale
+	bg := pick(n > 10, 1.0, 1.6) * mbScale
+	h := 13.0 * mbScale
+	top := mid - h/2
+	for i, v := range s.Bars {
+		bx := x + float64(i)*(bw+bg)
+		if n > 10 && i > s.Now {
+			cv.dot(cv.dim, bx+bw/2, top+h-0.7*mbScale, 0.7*mbScale, 1)
+			continue
+		}
+		bh := math.Max(1.2*mbScale, v/maxV*h)
+		cv.rect(cv.layer(false, i != s.Now), bx, top+h-bh, bx+bw, top+h, 0.6*mbScale, 1)
 	}
-	w += cv.text(face, s.Value, x+w, base, cv.layer(hot, false))
-	return w
+	return float64(n) * (bw + bg)
 }
 
 // composeMenuBar crops and colours the layers. Without an alert it is a template (black + alpha, dimmed parts at
@@ -362,7 +316,8 @@ func composeMenuBar(cv *mbCanvas, w int, o mbOpts) ([]byte, bool) {
 	for y := range cv.h {
 		for x := range w {
 			ai := float64(cv.ink.AlphaAt(x, y).A) / 255
-			ad := float64(cv.dim.AlphaAt(x, y).A) / 255 * 0.42
+			ad := float64(cv.dim.AlphaAt(x, y).A) / 255 * 0.35
+			as := float64(cv.soft.AlphaAt(x, y).A) / 255 * 0.62
 			ar := float64(cv.alert.AlphaAt(x, y).A) / 255
 			// Over-composite: dim under ink under alert.
 			col := [3]float64{}
@@ -378,6 +333,7 @@ func composeMenuBar(cv *mbCanvas, w int, o mbOpts) ([]byte, bool) {
 				a = na
 			}
 			over(ink, ad)
+			over(ink, as)
 			over(ink, ai)
 			if hasAlert {
 				over(red, ar)

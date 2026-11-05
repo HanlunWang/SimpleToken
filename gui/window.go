@@ -27,6 +27,7 @@ type winState struct {
 	calDate       time.Time
 	winW          float32
 	search        string // the widget drawer's search
+	firstRow      bool   // the settings row being built is its group's first (no hairline above it)
 	bitmaps       map[string]*ui.Bitmap
 }
 

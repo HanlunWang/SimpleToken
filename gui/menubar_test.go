@@ -25,13 +25,13 @@ func demoSegs() map[string][]mbSeg {
 
 // TestMenuBarRenders checks every style draws something; with SIMPLETOKEN_SHOTS it also writes a contact sheet.
 func TestMenuBarRenders(t *testing.T) {
-	styles := []mbStyle{mbText, mbStacked, mbDense, mbRing, mbRings, mbBar}
+	styles := []mbStyle{mbGauge, mbNumbers, mbBars}
 	names := []string{"claude", "three", "today", "hot", "hours", "empty"}
 	var rows []image.Image
 	for _, dark := range []bool{true, false} {
 		for _, n := range names {
 			for _, st := range styles {
-				o := mbOpts{Style: st, Labels: n == "three", Pace: true, Icon: true, Red: true, Dark: dark}
+				o := mbOpts{Style: st, Pace: true, Icon: true, Red: true, Dark: dark}
 				data, tmpl := renderMenuBar(demoSegs()[n], o)
 				img, err := png.Decode(bytes.NewReader(data))
 				if err != nil {
@@ -54,9 +54,9 @@ func TestMenuBarRenders(t *testing.T) {
 	if dir == "" {
 		return
 	}
-	sheet := image.NewNRGBA(image.Rect(0, 0, 6*300, len(rows)/6*44))
+	sheet := image.NewNRGBA(image.Rect(0, 0, 3*300, len(rows)/3*44))
 	for i, im := range rows {
-		x, y := (i%6)*300, (i/6)*44
+		x, y := (i%3)*300, (i/3)*44
 		draw.Draw(sheet, image.Rect(x, y, x+300, y+44), im, image.Point{}, draw.Src)
 	}
 	f, _ := os.Create(filepath.Join(dir, "menubar.png"))

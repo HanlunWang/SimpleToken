@@ -56,7 +56,7 @@ func TestReadmeImages(t *testing.T) {
 	render("settings", s.windowView, 1080, 460, false)
 
 	// Menu bar: every style on the same values, dark and light menu bars side by side.
-	styles := []mbStyle{mbText, mbStacked, mbDense, mbRing, mbRings, mbBar}
+	styles := []mbStyle{mbGauge, mbNumbers, mbBars}
 	const cell = 420
 	sheet := image.NewNRGBA(image.Rect(0, 0, 2*cell, len(styles)*44))
 	for i, st := range styles {
