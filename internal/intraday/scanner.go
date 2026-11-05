@@ -165,9 +165,10 @@ type Scanner struct {
 	root     string
 	keepDays int
 	offsets  map[string]int64
-	// seen holds counted messages as 64-bit FNV-1a hashes of message.id + requestId: hashes instead of strings
-	// keep 90 days of several hundred thousand messages to a few MB.
-	seen     map[uint64]struct{}
+	// seen holds counted messages as 64-bit FNV-1a hashes of message.id + requestId, with the local day number
+	// they fall on: hashes instead of strings keep 90 days of several hundred thousand messages to a few MB, and
+	// the day lets each scan drop what has left the kept days, so the set does not grow with uptime.
+	seen     map[uint64]int64
 	snapshot Snapshot
 	// offsetCache is the local UTC offset (seconds) per UTC hour: correct across DST without a zone lookup per line.
 	offsetCache map[int64]int64
@@ -187,7 +188,7 @@ func NewScanner(root string, keepDays int) *Scanner {
 	}
 	return &Scanner{
 		root: root, keepDays: keepDays,
-		offsets: map[string]int64{}, seen: map[uint64]struct{}{}, snapshot: NewSnapshot(),
+		offsets: map[string]int64{}, seen: map[uint64]int64{}, snapshot: NewSnapshot(),
 		offsetCache: map[int64]int64{}, dayKeyCache: map[int64]string{},
 	}
 }
@@ -206,6 +207,7 @@ func (s *Scanner) Scan(now time.Time) Snapshot {
 		return s.snapshot.clone()
 	}
 	readBytes := 0
+	visited := make(map[string]bool, len(s.offsets))
 	_ = filepath.WalkDir(s.root, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			if d != nil && d.IsDir() && path != s.root {
@@ -226,20 +228,50 @@ func (s *Scanner) Scan(now time.Time) Snapshot {
 		if err != nil || info.ModTime().Before(cutoff) {
 			return nil
 		}
+		visited[path] = true
 		readBytes += s.readFile(path, info.Size())
 		return nil
 	})
-	for k := range s.snapshot.ByModel {
-		if k < s.cutoffKey {
-			delete(s.snapshot.ByModel, k)
-		}
-	}
+	s.prune(cutoff, visited)
 	// After the first full pass over hundreds of MB of logs, return the buffer pages to the system
 	if readBytes > 32<<20 {
 		s.buf = nil
 		debug.FreeOSMemory()
 	}
 	return s.snapshot.clone()
+}
+
+// prune drops what has left the kept days, so nothing here grows with uptime: buckets, counted messages, the
+// lookup caches, and the offsets of files that are gone or too old to read (one appended to again is read from
+// the start; the dedup set keeps that from counting twice).
+func (s *Scanner) prune(cutoff time.Time, visited map[string]bool) {
+	for k := range s.snapshot.ByModel {
+		if k < s.cutoffKey {
+			delete(s.snapshot.ByModel, k)
+		}
+	}
+	// A day of margin on each: the day number is local, the cutoff is not
+	oldDay := floorDiv(cutoff.Unix(), 86400) - 1
+	for h, day := range s.seen {
+		if day < oldDay {
+			delete(s.seen, h)
+		}
+	}
+	for d := range s.dayKeyCache {
+		if d < oldDay {
+			delete(s.dayKeyCache, d)
+		}
+	}
+	for hour := range s.offsetCache {
+		if hour < oldDay*24 {
+			delete(s.offsetCache, hour)
+		}
+	}
+	for path := range s.offsets {
+		if !visited[path] {
+			delete(s.offsets, path)
+		}
+	}
 }
 
 // readFile ingests the complete lines past the stored offset; returns the bytes consumed.
@@ -417,18 +449,6 @@ func (s *Scanner) ingest(line []byte) {
 	if mid == nil && rid == nil {
 		return
 	}
-	h := fnv1a(line, mid, rid)
-	if _, dup := s.seen[h]; dup {
-		return
-	}
-	s.seen[h] = struct{}{}
-	var tokens int64
-	for _, k := range tokenKeys {
-		tokens += intValue(k, line, usageAt)
-	}
-	if tokens <= 0 {
-		return
-	}
 	// Convert to local time: day number + half-hour index within the day
 	hour := floorDiv(epoch, 3600)
 	offset, ok := s.offsetCache[hour]
@@ -446,6 +466,18 @@ func (s *Scanner) ingest(line []byte) {
 		s.dayKeyCache[dayNumber] = dayKey
 	}
 	if dayKey < s.cutoffKey {
+		return
+	}
+	h := fnv1a(line, mid, rid)
+	if _, dup := s.seen[h]; dup {
+		return
+	}
+	s.seen[h] = dayNumber
+	var tokens int64
+	for _, k := range tokenKeys {
+		tokens += intValue(k, line, usageAt)
+	}
+	if tokens <= 0 {
 		return
 	}
 	slot := min(SlotsPerDay-1, max(0, int((local-dayNumber*86400)/1800)))
@@ -650,34 +682,32 @@ func (s *Store) Refresh() (snap Snapshot, changed bool) {
 	return next, true
 }
 
-// Run scans every interval (60 s when ≤ 0) while not paused, and on resume, until done is closed. onChange,
-// when set, gets every changed snapshot.
+// Run scans every interval (60 s when ≤ 0) while not paused, and on resume, until done is closed. While paused it
+// keeps no timer, so nothing wakes the app; SetPaused(false) catches up at once. onChange, when set, gets every
+// changed snapshot.
 func (s *Store) Run(done <-chan struct{}, interval time.Duration, onChange func(Snapshot)) {
 	if interval <= 0 {
 		interval = time.Minute
 	}
-	tick := time.NewTicker(interval)
-	defer tick.Stop()
-	refresh := func() {
+	timer := time.NewTimer(interval)
+	defer timer.Stop()
+	for {
 		s.mu.Lock()
 		paused := s.paused
 		s.mu.Unlock()
-		if paused {
-			return
+		if !paused {
+			if snap, changed := s.Refresh(); changed && onChange != nil {
+				onChange(snap)
+			}
+			timer.Reset(interval)
+		} else {
+			timer.Stop()
 		}
-		if snap, changed := s.Refresh(); changed && onChange != nil {
-			onChange(snap)
-		}
-	}
-	refresh()
-	for {
 		select {
 		case <-done:
 			return
-		case <-tick.C:
-			refresh()
+		case <-timer.C:
 		case <-s.wake:
-			refresh()
 		}
 	}
 }
