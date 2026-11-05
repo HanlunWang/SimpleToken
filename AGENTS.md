@@ -40,7 +40,7 @@ Implementation detail: [docs/agent-reference.md](docs/agent-reference.md).
 
 ## Performance budget
 
-v2 release build: not yet measured against 0.1.x (A/B pending). Keep these rules:
+v2 build, same data, menu bar only, 2 min (2026-11-05): 43 MB footprint and 1.7 CPU-s against 0.1.5's 184 MB and 4.0 CPU-s; about 129 MB with the window open. Keep it that way:
 
 - Views never block on mygo app calls: read once and cache; appearance comes from `c.Theme().Dark`.
 - Live updates (collector live mode, intraday scans) pause when nothing visible needs them; a paused loop keeps no timer. The window and the panel drop their UI tree when closed.
