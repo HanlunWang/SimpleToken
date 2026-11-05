@@ -19,6 +19,7 @@ type limitItem struct {
 	spec  gaugeSpec
 	proj  float64 // −1 without a forecast
 	reset string
+	stale bool // the last probe failed: these are old numbers (offline); the needle hides, elapsed time alone says nothing
 }
 
 // limitItems are the shown providers' windows (per-model extras only when asked for), and the providers that
@@ -54,10 +55,40 @@ func (a *ctrl) limitItems(p palette) (items []limitItem, empty []limits.Entry) {
 				Col: m.vendorTint(p, string(e.Provider)), Hot: w.UsedPercent >= m.s.TopThreshold(), Ticks: 42, Stroke: 2.4,
 				Ground: p.Surf,
 			}
+			if e.Status.State == limits.StateFailed {
+				it.stale, it.proj = true, -1
+				it.spec.Elapsed, it.spec.Proj, it.spec.Col, it.spec.Hot = -1, -1, p.Ink[2], false
+			}
 			items = append(items, it)
 		}
 	}
 	return items, empty
+}
+
+// limitsOffline is when the shown limits were last read, when a probe is failing ("" when all are current).
+func (a *ctrl) limitsOffline() string {
+	for _, e := range a.m.d.Limits {
+		if e.Snapshot != nil && e.Status.State == limits.StateFailed && !slices.Contains(a.m.s.HiddenLimitProviders, string(e.Provider)) {
+			return fmtr.ResetTime(e.Snapshot.UpdatedAt, a.m.now())
+		}
+	}
+	return ""
+}
+
+// runsOut is when a window reaches 100 % at the pace so far, when that comes before its reset.
+func runsOut(w limits.Window, now time.Time) (time.Time, bool) {
+	if w.ResetsAt == nil || w.UsedPercent <= 0 {
+		return time.Time{}, false
+	}
+	el, ok := w.Elapsed(now)
+	if !ok || el <= 0 {
+		return time.Time{}, false
+	}
+	full := el * 100 / w.UsedPercent // share of the window gone when it reaches 100 %
+	if full >= 1 {
+		return time.Time{}, false
+	}
+	return w.ResetsAt.Add(-time.Duration((1 - full) * float64(w.Span()))), true
 }
 
 // limitName is "Claude 5-hour", "Codex weekly", or the window alone when the provider is clear.
@@ -183,6 +214,8 @@ func (a *ctrl) limitsCard(c *ui.Context, p palette, size cardSize) {
 								}
 							})
 							switch {
+							case it.stale:
+								p.mono(c, L("stale"), 10.5, p.T3)
 							case it.spec.Hot:
 								p.mono(c, "! "+L("resets in %@", it.reset), 10.5, p.Red)
 							case it.reset != "":

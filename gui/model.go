@@ -40,6 +40,7 @@ type model struct {
 	s        settings.Settings
 	version  int
 	reports  map[string]analytics.Report
+	pairMemo map[string]map[[2]string]float64 // tool × model per range × metric
 	rank     []string // models by the last 30 days, colour slots follow it (never the selected range)
 	monthArr analytics.MonthCost
 	now      func() time.Time
@@ -58,6 +59,7 @@ func (m *model) setData(d data) {
 func (m *model) invalidate() {
 	m.version++
 	m.reports = map[string]analytics.Report{}
+	m.pairMemo = nil
 	m.rank = nil
 	m.monthArr = analytics.MonthCost{}
 }
@@ -106,8 +108,22 @@ func (m *model) days(n int) []analytics.DaySummary {
 	return all
 }
 
-// pairs is tool × model tokens over the days of a report (for the flow and the usage map).
+// pairs is tool × model tokens over the days of a report (for the flow and the usage map), memoized per range ×
+// metric until the data changes.
 func (m *model) pairs(rep analytics.Report) map[[2]string]float64 {
+	key := string(rep.Range) + "|" + string(rep.Metric)
+	if v, ok := m.pairMemo[key]; ok {
+		return v
+	}
+	if m.pairMemo == nil {
+		m.pairMemo = map[string]map[[2]string]float64{}
+	}
+	v := m.buildPairs(rep)
+	m.pairMemo[key] = v
+	return v
+}
+
+func (m *model) buildPairs(rep analytics.Report) map[[2]string]float64 {
 	in := map[string]bool{}
 	for _, d := range rep.Days {
 		in[d.Date] = true

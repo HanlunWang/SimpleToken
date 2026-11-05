@@ -151,6 +151,9 @@ func (a *ctrl) cardNote(id string, rep analytics.Report) string {
 	case "hero":
 		return rangeSpan(rep) + " · " + L("cumulative")
 	case "limits":
+		if t := a.limitsOffline(); t != "" {
+			return L("Offline · from %@", t)
+		}
 		if t := a.limitsProbed(); t != "" {
 			return L("Probed %@", t)
 		}

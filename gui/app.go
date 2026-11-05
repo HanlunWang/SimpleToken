@@ -3,6 +3,7 @@ package gui
 import (
 	"context"
 	"log"
+	"math"
 	"os"
 	"path/filepath"
 	"slices"
@@ -435,11 +436,15 @@ func (a *ctrl) checkAlerts() {
 			snaps = append(snaps, *e.Snapshot)
 		}
 	}
+	now := a.m.now()
 	for _, al := range a.notifier.Check(snaps, a.m.s.AlertThresholds, hidden) {
-		title := al.Provider.DisplayName() + " · " + windowLabel(al.Window)
-		body := L("%@ · %@: %lld%% used", al.Provider.DisplayName(), windowLabel(al.Window), int64(al.Window.UsedPercent))
-		if al.Window.ResetsAt != nil {
-			body += " · " + fmtr.CountdownLeft(time.Until(*al.Window.ResetsAt))
+		it := limitItem{prov: al.Provider, w: al.Window}
+		title := L("%@ at %@", limitName(it, true), itoa(int(math.Round(al.Window.UsedPercent)))+"%")
+		body := ""
+		if at, ok := runsOut(al.Window, now); ok {
+			body = L("At this pace it runs out %@, %@ before the %@ reset", fmtr.ResetTime(at, now), fmtr.ShortCountdown(al.Window.ResetsAt.Sub(at)), fmtr.ResetTime(*al.Window.ResetsAt, now))
+		} else if al.Window.ResetsAt != nil {
+			body = L("Resets %@", fmtr.ResetTime(*al.Window.ResetsAt, now))
 		}
 		mygo.NewNotification(mygo.NotificationOptions{Title: title, Body: body}).Show()
 	}

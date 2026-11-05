@@ -89,6 +89,17 @@
         }
       }
     },
+    "%@ at %@": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ 达到 %@"
+          }
+        }
+      }
+    },
     "%@ before the %@ reset": {
       "extractionState": "manual",
       "localizations": {
@@ -1363,6 +1374,17 @@
         }
       }
     },
+    "At this pace it runs out %@, %@ before the %@ reset": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "按当前速度会在 %1$@ 用完，比 %3$@ 的重置早 %2$@"
+          }
+        }
+      }
+    },
     "at this pace ≈ %@ by midnight": {
       "extractionState": "manual",
       "localizations": {
@@ -1557,6 +1579,17 @@
           "stringUnit": {
             "state": "translated",
             "value": "品牌标志"
+          }
+        }
+      }
+    },
+    "Building your history…": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在建立历史记录…"
           }
         }
       }
@@ -4897,6 +4930,17 @@
         }
       }
     },
+    "Offline · from %@": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "离线 · 数据截至 %@"
+          }
+        }
+      }
+    },
     "On pace": {
       "extractionState": "manual",
       "localizations": {
@@ -5542,6 +5586,17 @@
           "stringUnit": {
             "state": "translated",
             "value": "正在读取额度"
+          }
+        }
+      }
+    },
+    "Reading the logs Claude Code, Codex, Gemini CLI and Cursor keep on this Mac. The dashboard opens as soon as today is in.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在读取 Claude Code、Codex、Gemini CLI 和 Cursor 在这台 Mac 上的日志。读到今天的数据后就会打开仪表盘。"
           }
         }
       }
@@ -6569,6 +6624,17 @@
         }
       }
     },
+    "stale": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "数据已过时"
+          }
+        }
+      }
+    },
     "Standard": {
       "extractionState": "manual",
       "localizations": {
@@ -7589,6 +7655,17 @@
           "stringUnit": {
             "state": "translated",
             "value": "用量"
+          }
+        }
+      }
+    },
+    "Usage and limits for your AI coding tools, in the menu bar.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在菜单栏查看 AI 编程工具的用量和额度。"
           }
         }
       }

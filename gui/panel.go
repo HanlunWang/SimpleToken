@@ -181,13 +181,9 @@ func (a *ctrl) panelLimits(c *ui.Context, p palette, prov limits.Provider) {
 		}
 		// Over the threshold and on course to run out before the reset: when, at this pace.
 		runOut, before := "", ""
-		if hot != nil && hot.w.ResetsAt != nil && hot.w.UsedPercent > 0 {
-			if el, ok := hot.w.Elapsed(m.now()); ok && el > 0 {
-				full := el * 100 / hot.w.UsedPercent // share of the window gone when it reaches 100 %
-				if full < 1 {
-					at := hot.w.ResetsAt.Add(-time.Duration((1 - full) * float64(hot.w.Span())))
-					runOut, before = format.Clock(at), fmtr.ShortCountdown(hot.w.ResetsAt.Sub(at))
-				}
+		if hot != nil {
+			if at, ok := runsOut(hot.w, m.now()); ok {
+				runOut, before = format.Clock(at), fmtr.ShortCountdown(hot.w.ResetsAt.Sub(at))
 			}
 		}
 		shown := items[:min(pick(runOut != "", 2, 3), len(items))]

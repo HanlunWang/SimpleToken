@@ -97,6 +97,10 @@ func (a *ctrl) windowView(c *ui.Context) {
 				Children(func() { a.settingsPage(c, p) })
 			return
 		}
+		if a.needsOnboarding() {
+			a.onboarding(c, p)
+			return
+		}
 		ui.Row(c.Key("dash")).Grow(1).FillWidth().MinHeight(0).Children(func() {
 			ui.Scroll(c.Key("scroll")).Grow(1).FillHeight().Children(func() {
 				ui.Column(c.Key("pad")).FillWidth().Padding(18, 20, 28).Children(func() {
