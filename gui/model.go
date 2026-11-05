@@ -41,7 +41,7 @@ type model struct {
 	version  int
 	reports  map[string]analytics.Report
 	pairMemo map[string]map[[2]string]float64 // tool × model per range × metric
-	rank     []string // models by the last 30 days, colour slots follow it (never the selected range)
+	rank     []string                         // models by the last 30 days, colour slots follow it (never the selected range)
 	monthArr analytics.MonthCost
 	now      func() time.Time
 }
