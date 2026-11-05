@@ -95,6 +95,9 @@ type Settings struct {
 
 	// Bookkeeping
 	ImportedFromUserDefaults bool `json:"importedFromUserDefaults"`
+
+	// FirstRun is set when neither settings.json nor 0.1.x settings existed: a new install. Not saved.
+	FirstRun bool `json:"-"`
 }
 
 // Cards is every widget in default order. Stats are widgets of their own.
@@ -138,7 +141,11 @@ func Load() Settings {
 	if os.Getenv("SIMPLETOKEN_DATA_DIR") == "" {
 		if old, err := readUserDefaults(BundleID); err == nil && len(old) > 0 {
 			s.importDefaults(old)
+		} else {
+			s.FirstRun = true
 		}
+	} else {
+		s.FirstRun = true
 	}
 	s.ImportedFromUserDefaults = true
 	s.normalize()

@@ -277,7 +277,8 @@ func (a *ctrl) ready() {
 	}
 	a.pull()
 	a.syncMenuBar()
-	if os.Getenv("SIMPLETOKEN_NO_WINDOW") != "1" { // dev: measure the menu-bar-only state
+	// A menu bar app starts in the menu bar (at login too); only a new install opens the window, for onboarding.
+	if a.m.s.FirstRun && os.Getenv("SIMPLETOKEN_NO_WINDOW") != "1" {
 		a.openWindow(false)
 	}
 	// Clock-bound items (countdowns, today by hour) redraw every 30 s; the image is only re-set when it changed.
