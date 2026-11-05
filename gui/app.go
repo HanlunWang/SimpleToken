@@ -60,6 +60,7 @@ type ctrl struct {
 	pullMu      sync.Mutex
 	pullPending bool
 	demo        bool
+	running     bool // the app is up (not a headless test): app-wide calls are safe
 }
 
 // Run starts the menu bar app and blocks until it quits.
@@ -249,6 +250,8 @@ func (a *ctrl) loadDemo() {
 }
 
 func (a *ctrl) ready() {
+	a.running = true
+	a.applyTheme()
 	var err error
 	a.tray, err = mygo.NewTray(mygo.TrayOptions{ID: "main", IconIsTemplate: true, ToolTip: "SimpleToken"})
 	if err != nil {
@@ -311,15 +314,32 @@ func (a *ctrl) shutdown() {
 }
 
 // palette is the current palette for the resolved appearance.
-func (a *ctrl) palette() palette {
+// palette is a view's colours. Light and dark follow the theme setting; with "system" (the default) the frame's
+// base theme, which follows the system appearance: reading it never blocks, and a switch redraws the window.
+func (a *ctrl) palette(c *ui.Context) palette {
 	dark := true
 	switch a.m.s.Theme {
 	case "light":
 		dark = false
-	case "system":
-		dark = mygo.Theme.IsDark()
+	case "dark":
+	default:
+		if t := c.Theme(); t != nil {
+			dark = t.Dark
+		}
 	}
 	return newPalette(dark, Pal(a.m.s.Palette))
+}
+
+// applyTheme sets the app's appearance (windows, menus, the panel's vibrancy) from the theme setting.
+func (a *ctrl) applyTheme() {
+	switch a.m.s.Theme {
+	case "light":
+		mygo.Theme.SetSource(mygo.ThemeLight)
+	case "dark":
+		mygo.Theme.SetSource(mygo.ThemeDark)
+	default:
+		mygo.Theme.SetSource(mygo.ThemeSystem)
+	}
 }
 
 // invalidate redraws every open surface and the menu bar item.
@@ -369,6 +389,9 @@ func (a *ctrl) saveSettings() {
 		hidden = append(hidden, limits.Provider(h))
 	}
 	a.lim.SetHiddenProviders(hidden)
+	if a.running {
+		a.applyTheme()
+	}
 	if a.win != nil {
 		a.win.SetAlwaysOnTop(s.FloatingWindow)
 	}

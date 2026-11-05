@@ -9,7 +9,7 @@ import (
 func TestLoadDefaultsAndRoundTrip(t *testing.T) {
 	t.Setenv("SIMPLETOKEN_DATA_DIR", t.TempDir())
 	s := Load()
-	if s.Range != "1M" || s.SeriesColors != "ink" || len(s.CardOrder) != len(Cards) {
+	if s.Range != "1M" || s.SeriesColors != "vendor" || s.Theme != "system" || len(s.CardOrder) != len(Cards) {
 		t.Fatalf("defaults: %+v", s)
 	}
 	s.Palette, s.PanelLimitStyle = "signal", "rings"
@@ -30,7 +30,7 @@ func TestImportDefaultsKeepsKnownKeys(t *testing.T) {
 		"modelColorMode": "vendor", "panelWidth": "not a number",
 	})
 	s.normalize()
-	if s.Range != "3M" || !s.ExactNumbers || s.PanelLimitStyle != "meters" || s.SeriesColors != "ink" {
+	if s.Range != "3M" || !s.ExactNumbers || s.PanelLimitStyle != "meters" || s.SeriesColors != "vendor" {
 		t.Fatalf("import: %+v", s)
 	}
 	if !slices.Equal(s.MenuBarItems, []string{"claude.weekly", "today.tokens"}) || s.TopThreshold() != 90 {

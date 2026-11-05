@@ -29,9 +29,9 @@ type Settings struct {
 	AutoUpdate      bool   `json:"autoUpdate"`
 
 	// Appearance (new in v2)
-	Theme         string `json:"theme"`         // dark light system
-	Palette       string `json:"palette"`       // paper graphite signal ice peach phosphor
-	SeriesColors  string `json:"seriesColors"`  // ink vendor
+	Theme         string `json:"theme"`         // system dark light
+	Palette       string `json:"palette"`       // graphite paper ice
+	SeriesColors  string `json:"seriesColors"`  // vendor ink
 	VendorMarks   string `json:"vendorMarks"`   // color mono
 	PanelMaterial string `json:"panelMaterial"` // glass solid
 
@@ -110,7 +110,7 @@ var DefaultHidden = []string{"stat.totalCost", "stat.messages", "stat.topModel",
 func Default() Settings {
 	return Settings{
 		ClickOpensPanel: true, Range: "1M", Metric: "tokens", AutoUpdate: true,
-		Theme: "dark", Palette: "paper", SeriesColors: "ink", VendorMarks: "color", PanelMaterial: "glass",
+		Theme: "system", Palette: "graphite", SeriesColors: "vendor", VendorMarks: "color", PanelMaterial: "glass",
 		LiveRefreshSeconds: 30, FullRefreshMinutes: 15,
 		LimitShowUsed: true, AlertThresholds: []float64{50, 80}, LimitShowPace: true, LimitShowModelBuckets: true,
 		MenuBarItems: []string{"claude.session"}, MenuBarStyle: "text", MenuBarAlertColor: true, MenuBarShowIcon: true, MenuBarShowPace: true,
@@ -162,6 +162,12 @@ func (s *Settings) normalize() {
 	}
 	if !slices.Contains([]string{"tokens", "cost", "messages"}, s.Metric) {
 		s.Metric = d.Metric
+	}
+	if !slices.Contains([]string{"system", "dark", "light"}, s.Theme) {
+		s.Theme = d.Theme
+	}
+	if !slices.Contains([]string{"vendor", "ink"}, s.SeriesColors) {
+		s.SeriesColors = d.SeriesColors
 	}
 	switch s.PanelLimitStyle {
 	case "rings":
@@ -344,8 +350,8 @@ func (s *Settings) importDefaults(m map[string]any) {
 		_ = json.Unmarshal(one, s)
 	}
 	// 0.1.x kept these under other names or shapes.
-	if o, ok := m["modelColorMode"].(string); ok && o == "vendor" {
-		// The v2 default is ink (owner decision, 2026-10-21); vendor stays one switch away.
+	if o, ok := m["modelColorMode"].(string); ok && o != "vendor" {
+		// 0.1.x's colour-blind-safe mode is closest to the ink ladder; its vendor ladders map to vendor colours.
 		s.SeriesColors = "ink"
 	}
 	if items, ok := m["menuBarItems"].([]any); ok {

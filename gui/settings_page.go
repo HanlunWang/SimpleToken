@@ -198,17 +198,11 @@ func (a *ctrl) setAppearance(c *ui.Context, p palette) {
 func palName(id Pal) string {
 	switch id {
 	case PalPaper:
-		return "Paper · Cursor"
-	case PalGraphite:
-		return "Graphite · Vercel"
-	case PalSignal:
-		return "Signal · Nothing"
+		return "Paper"
 	case PalIce:
 		return "Ice"
-	case PalPeach:
-		return "Peach"
 	}
-	return "Phosphor"
+	return "Graphite"
 }
 
 var menuBarItems = [][2]string{

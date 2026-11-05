@@ -199,7 +199,7 @@ func vendorLogo(id string) string {
 	return ""
 }
 
-// vendorTint is the small vendor mark colour (logos, bands). Mono marks use the secondary ink.
+// vendorTint is a vendor mark's colour (logos, limit gauges). Mono marks use the secondary ink.
 func (m *model) vendorTint(p palette, vendor string) ui.Color {
 	if m.s.VendorMarks == "mono" {
 		return p.T2
@@ -210,74 +210,90 @@ func (m *model) vendorTint(p palette, vendor string) ui.Color {
 	case "openai", "codex":
 		return p.Vendor.OpenAI
 	case "google", "gemini":
-		return p.Vendor.Google2
+		return p.Vendor.Google
 	case "xai", "grok", "grokbot", "cursor":
 		return p.Vendor.XAI
 	}
 	return p.T3
 }
 
-// modelColor is a series colour: the ink ladder by 30-day rank, or the vendor ladder, the rest "Other".
+// modelFamily is the colour family of a model id: opus, sonnet, haiku, fable, codex (GPT and the o-series),
+// gemini, grok, or "" for one without a colour of its own.
+func modelFamily(model string) string {
+	m := strings.ToLower(model)
+	for _, f := range []string{"opus", "sonnet", "haiku", "fable", "gemini", "grok"} {
+		if strings.Contains(m, f) {
+			return f
+		}
+	}
+	if vendorOf(model) == "openai" {
+		return "codex"
+	}
+	return ""
+}
+
+// modelColor is a model's series colour. With vendor colours (the default) colour follows the model family and
+// never its rank; with ink, the ink ladder by 30-day rank. Models past the separate-models count fold into Other
+// either way.
 func (m *model) modelColor(p palette, model string) ui.Color {
-	rank := slices.Index(m.ranking(), model)
-	sep := max(2, min(8, m.s.SeparateModels))
 	if c, ok := m.s.ModelColorOverrides[model]; ok && c != "" {
 		return ui.Hex(c)
 	}
+	rank := slices.Index(m.ranking(), model)
+	sep := max(2, min(8, m.s.SeparateModels))
 	if rank < 0 || rank >= sep {
-		return pick(m.s.SeriesColors == "vendor", p.Vendor.Other, p.Ink[3])
+		return p.Model.Other
 	}
-	if m.s.SeriesColors != "vendor" {
-		return p.Ink[min(rank, 3)]
+	if m.s.SeriesColors == "ink" {
+		return p.Ink[min(rank, len(p.Ink)-1)]
 	}
-	// Vendor ladder: the n-th model of a vendor (by rank) takes the n-th step.
-	v := vendorOf(model)
-	step := 0
-	for _, o := range m.ranking()[:rank] {
-		if vendorOf(o) == v {
-			step++
-		}
+	switch modelFamily(model) {
+	case "opus":
+		return p.Model.Opus
+	case "sonnet":
+		return p.Model.Sonnet
+	case "haiku":
+		return p.Model.Haiku
+	case "fable":
+		return p.Model.Fable
+	case "codex":
+		return p.Model.Codex
+	case "gemini":
+		return p.Model.Gemini
+	case "grok":
+		return p.Vendor.XAI
 	}
-	switch v {
-	case "anthropic":
-		return []ui.Color{p.Vendor.Anthropic, p.Vendor.Anthropic2, p.Vendor.Anthropic3}[min(step, 2)]
-	case "openai":
-		return []ui.Color{p.Vendor.OpenAI, p.Vendor.OpenAI2}[min(step, 1)]
-	case "google":
-		return []ui.Color{p.Vendor.Google, p.Vendor.Google2}[min(step, 1)]
-	case "xai":
-		return []ui.Color{p.Vendor.XAI, p.Vendor.XAI2}[min(step, 1)]
-	}
-	return p.Vendor.Other
+	return p.Model.Other
 }
 
 // toolOrder is the fixed order of tools; their ink steps follow it.
 var toolOrder = []string{"claude", "codex", "cursor", "grokbot", "gemini", "copilot", "opencode", "grok", "kiro"}
 
+// toolColor: Claude Code clay, Codex slate, Gemini CLI violet; the xAI-run tools (Grok Bot, Cursor) are ink.
 func (m *model) toolColor(p palette, tool string) ui.Color {
 	if c, ok := m.s.ToolColorOverrides[tool]; ok && c != "" {
 		return ui.Hex(c)
 	}
-	if m.s.SeriesColors == "vendor" {
+	if m.s.SeriesColors != "ink" {
 		switch tool {
 		case "claude":
-			return p.Vendor.Anthropic
+			return p.Tool.Claude
 		case "codex":
-			return p.Vendor.OpenAI
-		case "cursor":
-			return p.Vendor.XAI2
-		case "grokbot", "grok":
-			return p.Vendor.XAI
+			return p.Tool.Codex
 		case "gemini":
-			return p.Vendor.Google
+			return p.Tool.Gemini
+		case "grokbot", "grok":
+			return p.Ink[1]
+		case "cursor":
+			return p.Tool.Cursor
 		}
-		return p.Vendor.Other
+		return p.Ink[3]
 	}
 	i := slices.Index(toolOrder, tool)
 	if i < 0 {
 		i = 3
 	}
-	return p.Ink[min(i, 3)]
+	return p.Ink[min(i, len(p.Ink)-1)]
 }
 
 var toolNames = map[string]string{

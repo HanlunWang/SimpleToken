@@ -56,7 +56,7 @@ const (
 
 // windowView is the main window: a top bar over the dashboard or the settings page.
 func (a *ctrl) windowView(c *ui.Context) {
-	p := a.palette()
+	p := a.palette(c)
 	c.SetTheme(p.theme(c.Theme()))
 	w := a.w
 	c.OnShortcut(ui.Cmd, ui.KeyR, a.refreshAll)

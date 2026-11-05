@@ -20,7 +20,7 @@ var panelSections = [][2]string{
 
 // panelView is the drop-down panel under the menu bar item.
 func (a *ctrl) panelView(c *ui.Context) {
-	p := a.palette().panelStyle()
+	p := a.palette(c).panelStyle()
 	c.SetTheme(p.theme(c.Theme()))
 	if c.Shortcut(0, ui.KeyEscape) {
 		a.closePanel()

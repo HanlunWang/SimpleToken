@@ -9,48 +9,45 @@ import (
 	"github.com/egoist/mygo/ui"
 )
 
-// Design language (shared with SimpleToggle v2): "quiet data, lit limits". Monochrome ground, hierarchy only
-// from the ink's opacity, one signal colour for what is happening now (the live end point, a limit over its
-// alert threshold, a refresh in progress). The panel is the Console surface (// captions), windows are the
-// softened Signal surface (▪ captions, › selection).
+// Design language (SimpleToggle, Graphite): colour lives in the data, the interface stays neutral. Hierarchy
+// comes only from the ink's opacity; one signal colour marks what is happening now (the live end point, the
+// elapsed-time needle, a refresh), and only that and an over-threshold limit glow. The panel is the Console
+// surface (// captions), windows are the softened Signal surface (▪ captions, › selection). Values follow
+// designs/simpletoken-v3/project/theme.css; the light variants of the data colours were validated on white
+// with the dataviz palette validator, the dark ones on #161616.
 
-// Pal names a palette (Settings → Appearance).
+// Pal names an interface palette (Settings → Appearance); each has a dark and a light variant.
 type Pal string
 
 const (
-	PalPaper    Pal = "paper"    // Cursor: warm neutrals + orange (default)
-	PalGraphite Pal = "graphite" // Vercel: pure neutral, the signal is the ink itself
-	PalSignal   Pal = "signal"   // Nothing: black and white + one red
-	PalIce      Pal = "ice"      // Vercel blue
-	PalPeach    Pal = "peach"    // opencode peach
-	PalPhosphor Pal = "phosphor" // terminal green
+	PalGraphite Pal = "graphite" // neutral greys, the signal is the ink itself (default)
+	PalPaper    Pal = "paper"    // warm neutrals, orange signal
+	PalIce      Pal = "ice"      // neutral greys, blue signal
 )
 
-var palettes = []Pal{PalPaper, PalGraphite, PalSignal, PalIce, PalPeach, PalPhosphor}
+var palettes = []Pal{PalGraphite, PalPaper, PalIce}
 
-// Seven base colours per palette: bg, bg2 (sidebar), surf (card), elev (popover), fg (ink), signal, on-signal.
+// Seven base colours per palette: bg, bg2 (sidebar), card, elev (popover), fg (ink), signal, on-signal.
 var palDark = map[Pal][7]string{
-	PalPaper:    {"#14120b", "#1a1812", "#1d1b15", "#25231b", "#edecec", "#ff6a2b", "#ffffff"},
-	PalGraphite: {"#0a0a0a", "#111111", "#141414", "#1c1c1c", "#ededed", "#f2f2f2", "#0a0a0a"},
-	PalSignal:   {"#000000", "#0b0b0b", "#0f0f0f", "#191919", "#f5f5f5", "#ff2a1f", "#ffffff"},
-	PalIce:      {"#0a0a0a", "#111111", "#141414", "#1c1c1c", "#ededed", "#52a8ff", "#00142b"},
-	PalPeach:    {"#0a0a0a", "#141414", "#171717", "#1e1e1e", "#eeeeee", "#fab283", "#1a1009"},
-	PalPhosphor: {"#060907", "#0b100c", "#0e140f", "#141d16", "#d9e8dc", "#7fd88f", "#06120a"},
+	PalGraphite: {"#0a0a0a", "#111111", "#161616", "#1c1c1c", "#ededed", "#f2f2f2", "#0a0a0a"},
+	PalPaper:    {"#14120b", "#1b1913", "#1f1d16", "#25231b", "#edecec", "#ff6a2b", "#ffffff"},
+	PalIce:      {"#0a0a0a", "#111111", "#161616", "#1c1c1c", "#ededed", "#52a8ff", "#00142b"},
 }
 var palLight = map[Pal][7]string{
-	PalPaper:    {"#f7f7f4", "#f0efea", "#fbfbf9", "#ffffff", "#26251e", "#f54e00", "#ffffff"},
 	PalGraphite: {"#fafafa", "#f2f2f2", "#ffffff", "#ffffff", "#171717", "#171717", "#ffffff"},
-	PalSignal:   {"#ffffff", "#f3f3f3", "#ffffff", "#ffffff", "#000000", "#d71921", "#ffffff"},
+	PalPaper:    {"#f7f7f4", "#f0efea", "#fbfbf9", "#ffffff", "#26251e", "#f54e00", "#ffffff"},
 	PalIce:      {"#ffffff", "#f7f7f7", "#ffffff", "#ffffff", "#171717", "#006bff", "#ffffff"},
-	PalPeach:    {"#ffffff", "#fafafa", "#ffffff", "#ffffff", "#1a1a1a", "#d07a2d", "#ffffff"},
-	PalPhosphor: {"#f4f7f3", "#ebf0ea", "#fbfdfb", "#ffffff", "#13201a", "#1f8a4c", "#ffffff"},
 }
 
+// normalizePal maps unknown names, and the six palettes of the first v2 builds, onto the three that remain.
 func normalizePal(p Pal) Pal {
-	if _, ok := palDark[p]; ok {
+	switch p {
+	case PalGraphite, PalPaper, PalIce:
 		return p
+	case "peach":
+		return PalPaper
 	}
-	return PalPaper
+	return PalGraphite
 }
 
 // Surface is the look of a window: the panel (Console) or a window (softened Signal).
@@ -70,15 +67,31 @@ type palette struct {
 	Sig, OnSig              ui.Color
 	Green, Red, Amber       ui.Color
 	DotOff                  ui.Color
-	Ink                     [4]ui.Color // opaque series ladder (ink mixed into the card colour)
-	Vendor                  vendorColors
-	Surface                 Surface
+	// Ink is the series ladder when colour is off: the ink at 92 / 62 / 42 / 26 / 14 % over the card, opaque so
+	// stacked marks never show through.
+	Ink     [5]ui.Color
+	Vendor  vendorColors
+	Model   modelColors
+	Tool    toolColors
+	Accent  accentColors
+	Surface Surface
 }
 
-// vendorColors are the vendor ladders (validated for colour-blind separation). xAI (Grok Bot, Cursor) is
-// deliberately black and white: its colour is the ink.
-type vendorColors struct {
-	Anthropic, Anthropic2, Anthropic3, OpenAI, OpenAI2, Google, Google2, XAI, XAI2, Other ui.Color
+// vendorColors mark a vendor: its logo and its limit gauges. xAI (Grok Bot, Cursor) is the ink.
+type vendorColors struct{ Anthropic, OpenAI, Google, XAI, Other ui.Color }
+
+// modelColors are the fixed series colours: colour follows the model family, never its rank. Past these, models
+// fold into Other (neutral). Validated as one categorical set in this order (adjacent stack neighbours).
+type modelColors struct{ Opus, Sonnet, Codex, Gemini, Haiku, Fable, Other ui.Color }
+
+// toolColors: Claude Code clay, Codex slate, Gemini CLI violet; Cursor stays ink.
+type toolColors struct{ Claude, Codex, Gemini, Cursor ui.Color }
+
+// accentColors are the single-series accents with their sequential ramps (one hue, light→dark on light, dark→
+// light on dark: index 0 is always the lowest value).
+type accentColors struct {
+	Slate, Clay, Violet, Rose ui.Color
+	SlateR, ClayR, VioletR    [4]ui.Color
 }
 
 func newPalette(dark bool, p Pal) palette {
@@ -93,21 +106,39 @@ func newPalette(dark bool, p Pal) palette {
 	pl.L1, pl.L2, pl.L3, pl.L4 = alpha(pl.FG, 0.04), alpha(pl.FG, 0.08), alpha(pl.FG, 0.13), alpha(pl.FG, 0.22)
 	pl.T1, pl.T2, pl.T3, pl.T4 = alpha(pl.FG, 0.94), alpha(pl.FG, 0.64), alpha(pl.FG, 0.42), alpha(pl.FG, 0.26)
 	pl.DotOff = alpha(pl.FG, 0.09)
-	pl.Ink = [4]ui.Color{mix(pl.Surf, pl.FG, 0.86), mix(pl.Surf, pl.FG, 0.58), mix(pl.Surf, pl.FG, 0.36), mix(pl.Surf, pl.FG, 0.20)}
+	for i, a := range []float32{0.92, 0.62, 0.42, 0.26, 0.14} {
+		pl.Ink[i] = mix(pl.Surf, pl.FG, a)
+	}
+	hex := func(dark, light string) ui.Color { return ui.Hex(pick(pl.Dark, dark, light)) }
 	if dark {
 		pl.Green, pl.Red, pl.Amber = ui.Hex("#46c08a"), ui.Hex("#ff5f57"), ui.Hex("#e8a73c")
-		pl.Vendor = vendorColors{Anthropic: ui.Hex("#c17755"), Anthropic2: ui.Hex("#f8d7be"), Anthropic3: ui.Hex("#6e3a28"),
-			OpenAI: ui.Hex("#209993"), OpenAI2: ui.Hex("#b3e6e2"), Google: ui.Hex("#505ba7"), Google2: ui.Hex("#8fa3e0"), Other: ui.Hex("#6a6a6e")}
 	} else {
 		pl.Green, pl.Red, pl.Amber = ui.Hex("#1f8a65"), ui.Hex("#d1383d"), ui.Hex("#b7791f")
-		pl.Vendor = vendorColors{Anthropic: ui.Hex("#b4663f"), Anthropic2: ui.Hex("#e9b48f"), Anthropic3: ui.Hex("#6e3a28"),
-			OpenAI: ui.Hex("#008c82"), OpenAI2: ui.Hex("#7cc8c2"), Google: ui.Hex("#4a58b2"), Google2: ui.Hex("#8495d6"), Other: ui.Hex("#8a8a8e")}
 	}
-	pl.Vendor.XAI, pl.Vendor.XAI2 = pl.Ink[0], pl.Ink[1]
-	if p == PalSignal {
-		pl.Red = pl.Sig // Nothing: red is the only signal; errors are told apart by their ✕ mark
+	pl.Model = modelColors{
+		Opus: hex("#c87f59", "#be6e46"), Sonnet: hex("#9a5032", "#843c1c"), Codex: hex("#7093d4", "#6390e0"),
+		Gemini: hex("#835895", "#713787"), Haiku: hex("#c37077", "#c9607a"), Fable: hex("#7d72c2", "#7a5fb0"),
+		Other: pl.Ink[3],
+	}
+	pl.Vendor = vendorColors{Anthropic: pl.Model.Opus, OpenAI: pl.Model.Codex, Google: pl.Model.Gemini, XAI: pl.Ink[0], Other: pl.Ink[2]}
+	pl.Tool = toolColors{Claude: pl.Model.Opus, Codex: pl.Model.Codex, Gemini: pl.Model.Gemini, Cursor: pl.Ink[2]}
+	pl.Accent = accentColors{
+		Slate: pl.Model.Codex, Clay: pl.Model.Opus, Violet: hex("#8670b8", "#7a5fb0"), Rose: pl.Model.Haiku,
+	}
+	if dark {
+		pl.Accent.SlateR = hexes("#3e4f78", "#566fa6", "#7093d4", "#a9bfe9")
+		pl.Accent.ClayR = hexes("#723c25", "#97532f", "#c87f59", "#e6b093")
+		pl.Accent.VioletR = hexes("#544579", "#6a5893", "#8670b8", "#bcaee0")
+	} else {
+		pl.Accent.SlateR = hexes("#9ab0e2", "#7a99d8", "#5579c4", "#34549a")
+		pl.Accent.ClayR = hexes("#e2a985", "#c97f55", "#a85d35", "#7a3d1c")
+		pl.Accent.VioletR = hexes("#b8a6dd", "#9479c4", "#7457a8", "#4f3780")
 	}
 	return pl
+}
+
+func hexes(a, b, c, d string) [4]ui.Color {
+	return [4]ui.Color{ui.Hex(a), ui.Hex(b), ui.Hex(c), ui.Hex(d)}
 }
 
 // panelStyle returns the palette for the Console surface.
@@ -118,19 +149,17 @@ func (p palette) sigLine() ui.Color  { return alpha(p.Sig, 0.55) }
 func (p palette) glow() ui.Color     { return alpha(p.Sig, 0.55) }
 func (p palette) glowSoft() ui.Color { return alpha(p.Sig, 0.24) }
 
-// Radii: panel (Console) 5 / 8 / 12, windows (softened Signal) 4 / 6 / 10.
+// dim is a series colour's "where it is heading" tone: the same hue at 30 %.
+func dim(c ui.Color) ui.Color { return alpha(c, 0.3) }
+
+// Radii: panel (Console) 5 / 8 / 12, windows (softened Signal) 4 / 8 / 10. Cards are 8 on both (theme.css .w).
 func (p palette) rCtl() float32 {
 	if p.Surface == surfacePanel {
 		return 5
 	}
 	return 4
 }
-func (p palette) rCard() float32 {
-	if p.Surface == surfacePanel {
-		return 8
-	}
-	return 6
-}
+func (p palette) rCard() float32 { return 8 }
 
 // theme maps the palette onto mygo's controls.
 func (p palette) theme(base *ui.Theme) *ui.Theme {
