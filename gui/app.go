@@ -121,9 +121,13 @@ func (a *ctrl) startStores() {
 	a.coll.History().SetFilter(analytics.NewFilter(s.ExcludedModels, s.ExcludedClients))
 	a.coll.SetOnChange(a.schedulePull)
 	a.lim.OnChange = a.schedulePull
+	a.intra = intraday.NewStore(intraday.NewScanner("", 90))
+	a.lim.UsageHistory = func() (limits.History, bool) {
+		snap, ok := a.intra.Fresh(10*time.Minute, time.Now())
+		return limits.History(snap.ByModel), ok
+	}
 	a.coll.Start(a.ctx)
 	a.lim.Start()
-	a.intra = intraday.NewStore(intraday.NewScanner("", 90))
 	go a.intra.Run(a.ctx.Done(), 60*time.Second, func(intraday.Snapshot) { a.schedulePull() })
 }
 

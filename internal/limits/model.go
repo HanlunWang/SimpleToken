@@ -84,11 +84,11 @@ func (w Window) Elapsed(now time.Time) (float64, bool) {
 	return max(0, min(1, f)), true
 }
 
-// Projected is the usage at reset at the current pace (%); ok is false early in the window (< 10 %), where
-// extrapolation is unreliable.
+// Projected is the usage at reset in a straight line at the pace so far (%); ok is false in the window's first
+// 5 %, where the line says little (Store.Projected goes by usage history there for Claude).
 func (w Window) Projected(now time.Time) (float64, bool) {
 	e, ok := w.Elapsed(now)
-	if !ok || w.UsedPercent <= 0 || e < 0.1 {
+	if !ok || w.UsedPercent <= 0 || e <= 0.05 {
 		return 0, false
 	}
 	return w.UsedPercent / e, true

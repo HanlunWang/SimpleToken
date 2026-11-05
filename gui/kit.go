@@ -43,12 +43,15 @@ func enterOnce(e ui.Element, d, delay time.Duration) float32 {
 // ── Text ──
 
 // caption is a section label: mono, upper case, tracked. Panel: "//" before it; windows: a signal square.
-func (p palette) caption(c *ui.Context, text string) ui.Element {
+func (p palette) caption(c *ui.Context, text string) ui.Element { return p.captionAcc(c, text, p.Sig) }
+
+// captionAcc is a caption whose square takes a card's accent (theme.css .st-caption.acc-*).
+func (p palette) captionAcc(c *ui.Context, text string, acc ui.Color) ui.Element {
 	return ui.Row(c).Gap(5).AlignItems(ui.Center).Shrink(0).Children(func() {
 		if p.Surface == surfacePanel {
 			ui.Text(c, "//").Font(monoFont).FontSize(10.5).TextColor(p.T4)
 		} else {
-			ui.Box(c).Size(4, 4).Radius(0.5).Background(p.Sig)
+			ui.Box(c).Size(4, 4).Radius(0.5).Background(acc)
 		}
 		ui.Text(c, strings.ToUpper(text)).Font(monoFont).FontSize(10.5).FontWeight(500).LetterSpacing(0.9).
 			TextColor(p.T3).SingleLine()
@@ -65,15 +68,31 @@ func (p palette) hint(c *ui.Context, text string) ui.Element {
 	return ui.Text(c, text).FontSize(11).TextColor(p.T3).Wrap()
 }
 
-// bigNum is a defining number in the dot face with its unit small in mono beside it; it rolls when it changes.
+// bigNum is a defining figure: Geist Regular, tight tracking (−0.04 em), tabular digits — quiet and exact. A unit
+// ("%", "/ 30") sits small in mono at the top right of the figure; it rolls when it changes.
 func (p palette) bigNum(c *ui.Context, key, value, unit string, size float32, col ui.Color) ui.Element {
-	return ui.Row(c.Key(key)).AlignItems(ui.End).Gap(size * 0.12).Shrink(0).Children(func() {
-		ui.Text(c.Key("v"), value).Font(dotFont).FontSize(size).LetterSpacing(size * 0.02).TextColor(col).SingleLine().
-			ContentTransition(ui.ContentTransition{Numeric: true})
+	return ui.Row(c.Key(key)).AlignItems(ui.Start).Gap(2).Shrink(0).Children(func() {
+		bigText(c.Key("v"), value, size, col)
 		if unit != "" {
-			ui.Text(c.Key("u"), unit).Font(monoFont).FontSize(max(10, size*0.36)).TextColor(p.T3).SingleLine().Margin(0, 0, size*0.08)
+			ui.Text(c.Key("u"), unit).Font(monoFont).FontSize(max(9.5, size*0.3)).TextColor(p.T3).SingleLine().Margin(size*0.12, 0, 0)
 		}
 	})
+}
+
+// bigText is a figure in the big-number face.
+func bigText(c *ui.Context, value string, size float32, col ui.Color) ui.Element {
+	return ui.Text(c, value).Font(uiFont).FontSize(size).LetterSpacing(-0.04 * size).FontFeatures("tnum").TextColor(col).
+		SingleLine().LineHeight(1).ContentTransition(ui.ContentTransition{Numeric: true})
+}
+
+// bigSpan is a figure in the big-number face for painting (gauges centre their figure themselves).
+func bigSpan(value string, size float32, col ui.Color) ui.Span {
+	return ui.Span{Text: value, Font: uiFont, Size: size, Color: col, LetterSpacing: -0.04 * size, Features: "tnum"}
+}
+
+// note is a card header's trailing note: small mono, upper case (theme.css .w-note).
+func (p palette) note(c *ui.Context, text string) ui.Element {
+	return ui.Text(c, strings.ToUpper(text)).Font(monoFont).FontSize(10.5).LetterSpacing(0.6).TextColor(p.T3).SingleLine()
 }
 
 // hair is a 1 px divider.
@@ -137,17 +156,28 @@ func (p palette) iconBtn(c *ui.Context, key, name, tip string, active bool) ui.E
 	return b
 }
 
-// badge is a short mono label. tone: "" neutral, "up", "sig".
+// badge is a short mono label. tone: "" neutral, "up" / "green", "red", "amber", "sig" (the signal). Windows draw
+// it outlined, the panel on a tinted ground.
 func (p palette) badge(c *ui.Context, text, tone string) ui.Element {
-	fg, bg := p.T2, p.L2
+	fg := p.T2
 	switch tone {
-	case "up":
-		fg, bg = p.Green, alpha(p.Green, 0.13)
+	case "up", "green":
+		fg = p.Green
+	case "red":
+		fg = p.Red
+	case "amber":
+		fg = p.Amber
 	case "sig":
-		fg, bg = p.Sig, p.sigSoft()
+		fg = p.Sig
 	}
-	return ui.Row(c).Height(18).Padding(0, 6).Radius(3).Background(bg).AlignItems(ui.Center).Shrink(0).Children(func() {
-		ui.Text(c, text).Font(monoFont).FontSize(10).LetterSpacing(0.3).TextColor(fg).SingleLine()
+	b := ui.Row(c).Height(18).Padding(0, 6).AlignItems(ui.Center).Shrink(0)
+	if p.Surface == surfacePanel {
+		b.Radius(4).Background(pick(tone == "", p.L2, alpha(fg, 0.15)))
+	} else {
+		b.Radius(2).Border(1, pick(tone == "", p.L4, alpha(fg, 0.7)))
+	}
+	return b.Children(func() {
+		ui.Text(c, text).Font(monoFont).FontSize(10.5).TextColor(fg).SingleLine()
 	})
 }
 
@@ -190,7 +220,7 @@ func (p palette) segmented(c *ui.Context, key string, selected int, labels ...st
 		for i, l := range labels {
 			s := ui.Row(c.Key(i)).FillHeight().Padding(0, 9).Radius(r - 2).AlignItems(ui.Center).Justify(ui.Center).Label(l)
 			widths[i] = s.Bounds().W
-			col := p.T3
+			col := p.T2
 			if i == selected || s.Hovered() {
 				col = p.T1
 			}
@@ -224,7 +254,15 @@ func (p palette) segValue(c *ui.Context, key string, value *string, opts [][2]st
 
 // toggle is the glowing switch (SimpleToggle's): an outlined capsule; on, the knob turns solid signal and glows.
 func (p palette) toggle(c *ui.Context, key string, on *bool) ui.Element {
-	w, h := float32(32), float32(18)
+	return p.toggleSized(c, key, on, 38, 21)
+}
+
+// toggleCompact is the switch in list rows.
+func (p palette) toggleCompact(c *ui.Context, key string, on *bool) ui.Element {
+	return p.toggleSized(c, key, on, 32, 18)
+}
+
+func (p palette) toggleSized(c *ui.Context, key string, on *bool, w, h float32) ui.Element {
 	sw := ui.SwitchBase(c.Key(key), on).Size(w, h).Radius(h / 2).Shrink(0)
 	pos := sw.AnimateTo("knob", b2f(*on), animKnob)
 	lit := max(0, min(sw.AnimateTo("lit", b2f(*on), animColor), 1))
@@ -255,19 +293,29 @@ func (p palette) toggle(c *ui.Context, key string, on *bool) ui.Element {
 	return sw
 }
 
-// chip is a small selectable pill (thresholds, providers).
+// chip is a small selectable pill (sizes, thresholds, providers): outlined; on, a filled ground and full ink.
 func (p palette) chip(c *ui.Context, key, label string, on bool) ui.Element {
-	b := ui.Row(c.Key(key)).Height(24).Padding(0, 9).Radius(p.rCtl()).Gap(5).AlignItems(ui.Center).Label(label).Shrink(0)
-	bd := pick(on, p.sigLine(), pick(b.Hovered(), p.L4, p.L3))
-	b.Border(1, b.AnimateColor("bd", bd, animHover)).Background(b.AnimateColor("bg", pick(on, p.sigSoft(), ui.Transparent), animHover))
+	b := ui.Row(c.Key(key)).Height(22).MinWidth(26).Padding(0, 7).Radius(4).AlignItems(ui.Center).Justify(ui.Center).
+		Label(label).Shrink(0)
+	bd := pick(on, p.L4, pick(b.Hovered(), p.L4, p.L3))
+	b.Border(1, b.AnimateColor("bd", bd, animHover)).Background(b.AnimateColor("bg", pick(on, p.L2, ui.Transparent), animHover))
 	pressPose(b, 0.95)
 	b.Children(func() {
-		if on {
-			ui.Box(c).Size(5, 5).Radius(2.5).Background(p.Sig)
-		}
-		ui.Text(c, label).Font(monoFont).FontSize(11).TextColor(p.T1).SingleLine()
+		ui.Text(c, label).Font(monoFont).FontSize(10.5).TextColor(pick(on || b.Hovered(), p.T1, p.T2)).SingleLine()
 	})
 	return b
+}
+
+// tile is a 28 × 28 rounded ground holding a logo or an icon (theme.css .st-tile).
+func (p palette) tile(c *ui.Context, logoName, iconName string, col ui.Color) ui.Element {
+	return ui.Row(c).Size(28, 28).Radius(6).Background(p.L2).AlignItems(ui.Center).Justify(ui.Center).Shrink(0).
+		Children(func() {
+			if logoName != "" {
+				logo(c, logoName, 15, col)
+			} else if iconName != "" {
+				icon(c, iconName, 15).TextColor(col)
+			}
+		})
 }
 
 // swatch is a small colour square (a series' identity in legends and rows).
@@ -328,7 +376,7 @@ func (p palette) brand(c *ui.Context, size float32, lamp bool) ui.Element {
 		if lamp {
 			k = g.Keyframes("on", []ui.Keyframe{{Value: 0}, {At: 950 * time.Millisecond, Value: 1, Ease: ui.Linear}})
 		}
-		g.Draw(func(pt *ui.Painter, r ui.Rect) { p.gaugeDots(pt, r, 12, 0.75, float64(k)) })
+		g.Draw(func(pt *ui.Painter, r ui.Rect) { p.gaugeDots(pt, r, 10, 6.0/9, float64(k)) })
 		ui.Text(c, "simpletoken").Font(monoFont).FontSize(size - 0.5).FontWeight(600).LetterSpacing(-0.1).TextColor(p.T1).SingleLine()
 	})
 }
@@ -372,6 +420,15 @@ func lampOn(t float64) float32 {
 		}
 	}
 	return 1
+}
+
+// hatch fills r with 135° hairlines every 4 DIPs (theme.css --hatch): a projection, what is still to come.
+func hatch(pt *ui.Painter, r ui.Rect, radius float32, col ui.Color) {
+	pt.Clip(r, radius, func() {
+		for x := r.X - r.H; x < r.X+r.W; x += 4 {
+			pt.StrokePolyline([][2]float32{{x, r.Y + r.H}, {x + r.H, r.Y}}, 1, col)
+		}
+	})
 }
 
 func itoa(n int) string { return strconv.Itoa(n) }

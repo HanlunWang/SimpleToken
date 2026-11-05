@@ -44,7 +44,7 @@ The brand logos are trademarks of their respective owners. They are included for
 
 ## Components of the v2 app (Go)
 
-- **Geist, Geist Mono, Geist Pixel** fonts (Vercel, in collaboration with basement.studio), `gui/fonts/*.ttf`: SIL Open Font License 1.1, full text in `gui/fonts/OFL.txt`. The pixel face is subset to basic Latin.
+- **Geist, Geist Mono** fonts (Vercel, in collaboration with basement.studio), `gui/fonts/*.ttf`: SIL Open Font License 1.1, full text in `gui/fonts/OFL.txt`.
 - **Lucide** icons 0.469.0 (lucide-static), `gui/icons/lucide.json.gz`: ISC License, full text in `gui/icons/LUCIDE_LICENSE`.
 - **mygo** (github.com/egoist/mygo): MIT License, Copyright (c) 2026 MyGo contributors.
 - **purego** (github.com/ebitengine/purego): Apache License 2.0.

@@ -558,7 +558,7 @@ func (a *ctrl) limitsCard(c *ui.Context, p palette, size cardSize) {
 					used, _, hot, reset := a.limitView(w)
 					ui.Column(c.Key(i)).Gap(1).Children(func() {
 						ui.Row(c).AlignItems(ui.End).Gap(2).Children(func() {
-							ui.Text(c, itoa(int(used+0.5))).Font(dotFont).FontSize(20).TextColor(pick(hot, p.Sig, p.T1)).SingleLine()
+							ui.Text(c, itoa(int(used+0.5))).Font(uiFont).FontSize(20).FontFeatures("tnum").TextColor(pick(hot, p.Sig, p.T1)).SingleLine()
 							p.mono(c, "% "+pick(w.Kind == limits.Session, "5h", L("wk")), 10, p.T3)
 						})
 						if reset != "" {
@@ -703,7 +703,7 @@ func (a *ctrl) modelsCard(c *ui.Context, p palette, size cardSize, rep analytics
 				cur = h
 			}
 			ui.Row(c).AlignItems(ui.End).Children(func() {
-				ui.Text(c, itoa(int(math.Round(vals[cur]/total*100)))).Font(dotFont).FontSize(pick(size == sizeM, float32(20), 26)).TextColor(p.T1).SingleLine()
+				ui.Text(c, itoa(int(math.Round(vals[cur]/total*100)))).Font(uiFont).FontSize(pick(size == sizeM, float32(20), 26)).FontFeatures("tnum").TextColor(p.T1).SingleLine()
 				p.mono(c, "%", 10, p.T3)
 			})
 			p.mono(c, m.modelName(cur), 9.5, p.T3).MaxWidth(dsize - 30).Ellipsis("…")
@@ -1256,7 +1256,7 @@ func (a *ctrl) compositionCard(c *ui.Context, p palette, size cardSize, rep anal
 				}
 			}
 			ui.Row(c).AlignItems(ui.End).Children(func() {
-				ui.Text(c, itoa(int(math.Round(v)))).Font(dotFont).FontSize(pick(size == sizeL, float32(24), 19)).TextColor(p.T1).SingleLine()
+				ui.Text(c, itoa(int(math.Round(v)))).Font(uiFont).FontSize(pick(size == sizeL, float32(24), 19)).FontFeatures("tnum").TextColor(p.T1).SingleLine()
 				p.mono(c, "%", 9.5, p.T3)
 			})
 			p.mono(c, label, 9, p.T3)

@@ -40,6 +40,9 @@ type ClaudeWebResult struct {
 	RenewedSessionKey string
 	// OrganizationID is the organisation read, for the caller to cache.
 	OrganizationID string
+	// Plan is the organisation's plan as claude.ai records it ("Max 5x"), when the organisation list was read and
+	// names one. Unlike Claude Code's Keychain item it follows a plan change at once.
+	Plan string
 }
 
 // NormalizeSessionKey trims a pasted cookie, drops a leading "sessionKey=" and checks the sk-ant- prefix.
@@ -73,6 +76,7 @@ func probeClient(timeout time.Duration) *http.Client {
 func (p *ClaudeWebProbe) Probe(ctx context.Context, cachedOrganizationID string) (ClaudeWebResult, error) {
 	current := p.SessionKey
 	orgID := cachedOrganizationID
+	plan := ""
 	if orgID == "" {
 		data, renewed, err := p.get(ctx, "/api/organizations", current)
 		if err != nil {
@@ -84,6 +88,7 @@ func (p *ClaudeWebProbe) Probe(ctx context.Context, cachedOrganizationID string)
 		if orgID, err = selectClaudeOrganization(data); err != nil {
 			return ClaudeWebResult{}, err
 		}
+		plan = organizationPlan(data, orgID)
 	}
 	data, renewed, err := p.get(ctx, "/api/organizations/"+orgID+"/usage", current)
 	if err != nil {
@@ -96,7 +101,7 @@ func (p *ClaudeWebProbe) Probe(ctx context.Context, cachedOrganizationID string)
 	if err != nil {
 		return ClaudeWebResult{}, err
 	}
-	res := ClaudeWebResult{Snapshot: snap, OrganizationID: orgID}
+	res := ClaudeWebResult{Snapshot: snap, OrganizationID: orgID, Plan: plan}
 	if current != p.SessionKey {
 		res.RenewedSessionKey = current
 	}
@@ -217,6 +222,55 @@ func selectClaudeOrganization(data []byte) (string, error) {
 		return orgID(candidates[0]), nil
 	}
 	return "", Unavailable{Reason: "no organization"}
+}
+
+// organizationPlan is an organisation's plan from claude.ai's record: rate_limit_tier ("default_claude_max_5x") and
+// capabilities ("claude_max", "claude_pro"). "" when neither names one.
+func organizationPlan(data []byte, id string) string {
+	var root any
+	if json.Unmarshal(data, &root) != nil {
+		return ""
+	}
+	var list []map[string]any
+	switch r := root.(type) {
+	case []any:
+		list = objects(r)
+	case map[string]any:
+		list = objects(first(r, "organizations", "data"))
+	}
+	for _, o := range list {
+		match := false
+		for _, k := range []string{"uuid", "id", "organization_uuid"} {
+			if v, ok := str(o[k]); ok && v == id {
+				match = true
+			}
+		}
+		if !match {
+			continue
+		}
+		tier, _ := str(o["rate_limit_tier"])
+		sub := ""
+		for _, c := range asSlice(o["capabilities"]) {
+			switch c {
+			case "claude_max":
+				sub = "max"
+			case "claude_pro":
+				if sub == "" {
+					sub = "pro"
+				}
+			}
+		}
+		if sub == "" {
+			for _, w := range strings.Split(strings.ToLower(tier), "_") {
+				if slices.Contains([]string{"max", "pro", "team", "enterprise"}, w) {
+					sub = w
+					break
+				}
+			}
+		}
+		return ClaudePlanLabel(sub, tier)
+	}
+	return ""
 }
 
 // parseClaudeUsage turns the usage response into windows: five_hour (session), seven_day (weekly) and the

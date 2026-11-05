@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"math/rand/v2"
+	"os/user"
 	"slices"
 	"sync"
 	"time"
@@ -99,12 +100,21 @@ type Store struct {
 	wg        sync.WaitGroup
 
 	// Claude probe state, touched only while holding the Claude provider's probing lock (planLabel under mu).
-	claudeOrgID string
-	planLabel   string
+	// The organisation list is read again hourly: it carries claude.ai's plan, which follows a plan change at once;
+	// Claude Code's Keychain item (planLabel, read again hourly too) keeps the old plan until it signs in again.
+	claudeOrgID   string
+	claudeOrgAt   time.Time
+	claudeWebPlan string
+	planLabel     string
+	planLabelAt   time.Time
 	// claudeBaseURL overrides claude.ai (tests); planLabelLoader reads Claude Code's plan metadata.
 	claudeBaseURL   string
 	planLabelLoader func(ctx context.Context) string
 	now             func() time.Time
+
+	// UsageHistory, set by the app before Start, gives Claude Code's half-hour usage for forecasts early in a
+	// window; ok is false when it is stale (its scans pause while nothing shows them).
+	UsageHistory func() (History, bool)
 }
 
 // NewStore wires the real probes; creds holds the Claude sessionKey (NewCredentialStore for the standard file).
@@ -403,17 +413,33 @@ func (s *Store) probeClaude(ctx context.Context) (Snapshot, error) {
 		return Snapshot{}, err
 	}
 	probe.BaseURL = s.claudeBaseURL
-	res, err := probe.Probe(ctx, s.claudeOrgID)
+	org := s.claudeOrgID
+	if s.now().Sub(s.claudeOrgAt) >= time.Hour {
+		org = ""
+	}
+	res, err := probe.Probe(ctx, org)
 	if err != nil {
 		// A stale organisation can cause a 401: redo the full flow next time.
 		s.claudeOrgID = ""
 		return Snapshot{}, err
 	}
+	if org == "" {
+		s.claudeOrgAt = s.now()
+		s.claudeWebPlan = res.Plan
+	}
 	s.claudeOrgID = res.OrganizationID
 	if res.RenewedSessionKey != "" {
 		_ = s.creds.SetClaudeCookie(res.RenewedSessionKey)
 	}
-	return res.Snapshot, nil
+	s.mu.Lock()
+	keychainStale := s.now().Sub(s.planLabelAt) >= time.Hour
+	s.mu.Unlock()
+	if s.claudeWebPlan == "" && keychainStale {
+		s.loadPlanLabel(ctx)
+	}
+	snap := res.Snapshot
+	snap.AccountLabel = s.claudeWebPlan
+	return snap, nil
 }
 
 func (s *Store) loadPlanLabel(ctx context.Context) {
@@ -421,6 +447,9 @@ func (s *Store) loadPlanLabel(ctx context.Context) {
 		return
 	}
 	label := s.planLabelLoader(ctx)
+	s.mu.Lock()
+	s.planLabelAt = s.now()
+	s.mu.Unlock()
 	if label == "" {
 		return
 	}
@@ -442,12 +471,24 @@ func (s *Store) loadPlanLabel(ctx context.Context) {
 
 // loadClaudePlanLabel reads only the subscriptionType / rateLimitTier metadata of Claude Code's Keychain item (new
 // builds keep no token there, but the metadata stays). The secret's content is parsed in memory and never kept.
+// Claude Code files the item under the user's account name; another item with the same service (another sign-in,
+// an older install) can come first, so this user's item is asked for before whichever matches.
 func loadClaudePlanLabel(ctx context.Context) string {
-	out, err := proc.Run(ctx, "/usr/bin/security", []string{"find-generic-password", "-s", "Claude Code-credentials", "-w"}, 5*time.Second)
-	if err != nil || out.ExitCode != 0 {
-		return ""
+	var accounts [][]string
+	if u, err := user.Current(); err == nil && u.Username != "" {
+		accounts = append(accounts, []string{"-a", u.Username})
 	}
-	return claudePlanLabelFromCredentials(out.Stdout)
+	for _, account := range append(accounts, nil) {
+		args := append(append([]string{"find-generic-password", "-s", "Claude Code-credentials"}, account...), "-w")
+		out, err := proc.Run(ctx, "/usr/bin/security", args, 5*time.Second)
+		if err != nil || out.ExitCode != 0 {
+			continue
+		}
+		if label := claudePlanLabelFromCredentials(out.Stdout); label != "" {
+			return label
+		}
+	}
+	return ""
 }
 
 func claudePlanLabelFromCredentials(data []byte) string {

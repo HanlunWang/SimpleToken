@@ -128,6 +128,7 @@ type fakeClaude struct {
 	rotate    string
 	usageCode int
 	header    http.Header
+	tier      string // rate_limit_tier of the organisation, when set
 }
 
 func (f *fakeClaude) handler(t *testing.T) http.Handler {
@@ -139,12 +140,16 @@ func (f *fakeClaude) handler(t *testing.T) http.Handler {
 		f.mu.Lock()
 		f.cookies = append(f.cookies, r.Header.Get("Cookie"))
 		f.agents = append(f.agents, r.Header.Get("User-Agent"))
-		rotate, code, extra := f.rotate, f.usageCode, f.header
+		rotate, code, extra, tier := f.rotate, f.usageCode, f.header, f.tier
 		f.mu.Unlock()
 		switch {
 		case r.URL.Path == "/api/organizations":
 			if rotate != "" {
 				w.Header().Add("Set-Cookie", "sessionKey="+rotate+"; Path=/; HttpOnly")
+			}
+			if tier != "" {
+				_, _ = w.Write([]byte(`[{"uuid":"org-1","capabilities":["chat","claude_max"],"rate_limit_tier":"` + tier + `"}]`))
+				return
 			}
 			_, _ = w.Write([]byte(`[{"uuid":"org-1","capabilities":["chat"]}]`))
 		case r.URL.Path == "/api/organizations/org-1/usage":

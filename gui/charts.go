@@ -665,7 +665,7 @@ func (p palette) dotGauge(c *ui.Context, key string, used, pace float64, hot boo
 	})
 	box.Children(func() {
 		ui.Row(c).Absolute().Left(0).Top(size/2 - size*0.15).Width(size).Justify(ui.Center).AlignItems(ui.End).PassThrough().Children(func() {
-			ui.Text(c, itoa(int(math.Round(used)))).Font(dotFont).FontSize(size * 0.27).TextColor(pick(hot, p.Sig, p.T1)).SingleLine()
+			ui.Text(c, itoa(int(math.Round(used)))).Font(uiFont).FontSize(size * 0.27).FontFeatures("tnum").TextColor(pick(hot, p.Sig, p.T1)).SingleLine()
 			ui.Text(c, "%").Font(monoFont).FontSize(max(9, size*0.11)).TextColor(p.T3).SingleLine()
 		})
 		ui.Column(c).Absolute().Left(-10).Top(size * 0.84).Width(size + 20).AlignItems(ui.Center).Gap(1).PassThrough().Children(func() {

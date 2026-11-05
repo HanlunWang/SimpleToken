@@ -618,12 +618,13 @@ func CivilFromDays(z int64) (y, m, d int64) {
 
 // Store is the app side: periodic incremental scans (every minute while not paused) and the latest snapshot.
 type Store struct {
-	scanner *Scanner
-	mu      sync.Mutex
-	snap    Snapshot
-	demo    bool
-	paused  bool
-	wake    chan struct{}
+	scanner   *Scanner
+	mu        sync.Mutex
+	snap      Snapshot
+	scannedAt time.Time
+	demo      bool
+	paused    bool
+	wake      chan struct{}
 }
 
 // NewStore wraps a scanner.
@@ -636,6 +637,17 @@ func (s *Store) Snapshot() Snapshot {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.snap
+}
+
+// Fresh is the latest snapshot when a scan finished within maxAge (demo data is always fresh): scans pause while
+// nothing shows intraday data, so the snapshot can be hours old.
+func (s *Store) Fresh(maxAge time.Duration, now time.Time) (Snapshot, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if !s.demo && now.Sub(s.scannedAt) > maxAge {
+		return Snapshot{}, false
+	}
+	return s.snap, true
 }
 
 // LoadDemo switches to synthetic buckets; logs are never scanned afterwards.
@@ -675,6 +687,7 @@ func (s *Store) Refresh() (snap Snapshot, changed bool) {
 	if s.demo {
 		return s.snap, false
 	}
+	s.scannedAt = time.Now()
 	if next.Equal(s.snap) {
 		return s.snap, false
 	}

@@ -383,11 +383,11 @@ func (p palette) money(c *ui.Context, key string, v float64, size float32) ui.El
 	return ui.Row(c.Key(key)).AlignItems(ui.End).Gap(1).Shrink(0).Children(func() {
 		ui.Text(c, "$").Font(monoFont).FontSize(size*0.42).TextColor(p.T3).SingleLine().Margin(0, 0, size*0.5)
 		if v < 100 {
-			ui.Text(c.Key("v"), ftoa(v, 2)).Font(dotFont).FontSize(size).TextColor(p.T1).SingleLine().ContentTransition(ui.ContentTransition{Numeric: true})
+			ui.Text(c.Key("v"), ftoa(v, 2)).Font(uiFont).FontSize(size).FontFeatures("tnum").TextColor(p.T1).SingleLine().ContentTransition(ui.ContentTransition{Numeric: true})
 			return
 		}
 		whole := math.Floor(v)
-		ui.Text(c.Key("v"), format.Grouped(int64(whole))).Font(dotFont).FontSize(size).TextColor(p.T1).SingleLine().ContentTransition(ui.ContentTransition{Numeric: true})
+		ui.Text(c.Key("v"), format.Grouped(int64(whole))).Font(uiFont).FontSize(size).FontFeatures("tnum").TextColor(p.T1).SingleLine().ContentTransition(ui.ContentTransition{Numeric: true})
 		ui.Text(c.Key("c"), "."+pad2(int(math.Round((v-whole)*100)))).Font(monoFont).FontSize(size*0.36).TextColor(p.T3).SingleLine().Margin(0, 0, size*0.08)
 	})
 }
