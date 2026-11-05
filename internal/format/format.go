@@ -483,3 +483,45 @@ func ResetTime(t, now time.Time) string {
 	}
 	return t.Format("Jan 2") + " " + Clock(t)
 }
+
+// ShortDate is a day key's month and day in the formatter's language: "Oct 13", or "10月13日".
+func (f Formatter) ShortDate(key string) string {
+	t, ok := DateFromKey(key)
+	if !ok {
+		return key
+	}
+	if f.CJKUnits {
+		return strconv.Itoa(int(t.Month())) + "月" + strconv.Itoa(t.Day()) + "日"
+	}
+	return t.Format("Jan 2")
+}
+
+// LongDate is a day key's weekday, month, day and year: "Mon, Sep 14, 2026", or "2026年9月14日 周一".
+func (f Formatter) LongDate(key string) string {
+	t, ok := DateFromKey(key)
+	if !ok {
+		return key
+	}
+	if f.CJKUnits {
+		return strconv.Itoa(t.Year()) + "年" + f.ShortDate(key) + " " + f.Weekday(t)
+	}
+	return t.Format("Mon, Jan 2, 2006")
+}
+
+// Weekday is a date's short weekday name: "Mon", or its catalog translation.
+func (f Formatter) Weekday(t time.Time) string { return f.l(Weekday(t)) }
+
+// MonthName is a date's short month name: "Oct", or its catalog translation.
+func (f Formatter) MonthName(t time.Time) string { return f.l(MonthName(t)) }
+
+// ResetTime is ResetTime in the formatter's language.
+func (f Formatter) ResetTime(t, now time.Time) string {
+	t, now = t.Local(), now.Local()
+	if DayKey(t) == DayKey(now) {
+		return Clock(t)
+	}
+	if d := t.Sub(now); d > 0 && d < 6*24*time.Hour {
+		return f.Weekday(t) + " " + Clock(t)
+	}
+	return f.ShortDate(DayKey(t)) + " " + Clock(t)
+}

@@ -7,7 +7,6 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
-	"github.com/HanlunWang/SimpleToken/internal/format"
 	"github.com/HanlunWang/SimpleToken/internal/limits"
 )
 
@@ -126,7 +125,7 @@ func (a *ctrl) limitsCard(c *ui.Context, p palette, size cardSize) {
 		}
 		if it.w.ResetsAt != nil {
 			start := it.w.ResetsAt.Add(-it.w.Span())
-			rows = append(rows, tipRow{}, tipRow{Label: L("Window"), Value: format.ResetTime(start, m.now()) + " → " + format.ResetTime(*it.w.ResetsAt, m.now())})
+			rows = append(rows, tipRow{}, tipRow{Label: L("Window"), Value: fmtr.ResetTime(start, m.now()) + " → " + fmtr.ResetTime(*it.w.ResetsAt, m.now())})
 		}
 		return upper(it.prov.DisplayName() + " · " + windowLabel(it.w)), rows
 	}

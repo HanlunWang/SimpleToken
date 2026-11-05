@@ -9,10 +9,9 @@ import (
 	"github.com/HanlunWang/SimpleToken/internal/format"
 )
 
-// The translations are the String Catalog the Swift app used (English keys, Simplified Chinese values), embedded
-// as is. `go generate ./app` refreshes the copy from App/Localizable.xcstrings while both apps live in the repo.
+// The translations are a String Catalog (English keys, Simplified Chinese values), embedded as is. It began as the
+// Swift app's App/Localizable.xcstrings and is the Go app's own now.
 //
-//go:generate cp ../App/Localizable.xcstrings i18n/Localizable.xcstrings
 //go:embed i18n/Localizable.xcstrings
 var catalogJSON []byte
 

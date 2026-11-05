@@ -156,7 +156,7 @@ func (a *ctrl) cardNote(id string, rep analytics.Report) string {
 		}
 	case "stat.peak":
 		if rep.Stats.Peak != nil {
-			return format.Weekday(dateOf(rep.Stats.Peak.Date)) + " " + format.ShortDate(rep.Stats.Peak.Date)
+			return fmtr.Weekday(dateOf(rep.Stats.Peak.Date)) + " " + fmtr.ShortDate(rep.Stats.Peak.Date)
 		}
 	case "stat.active":
 		return L("Streak %@", itoa(rep.Stats.Streak)+L("d"))
@@ -193,9 +193,9 @@ func rangeSpan(rep analytics.Report) string {
 	}
 	first, last := rep.Days[0].Date, rep.Days[len(rep.Days)-1].Date
 	if first == last {
-		return format.ShortDate(first)
+		return fmtr.ShortDate(first)
 	}
-	return format.ShortDate(first) + " – " + format.ShortDate(last)
+	return fmtr.ShortDate(first) + " – " + fmtr.ShortDate(last)
 }
 
 func dateOf(key string) time.Time {
@@ -298,7 +298,7 @@ func (a *ctrl) dayTip(p palette, d analytics.DaySummary) (string, []tipRow) {
 			rows = append(rows, tipRow{Logo: vendorLogo(k), LogoC: a.m.toolColor(p, k), Label: toolName(k), Value: shortNum(float64(d.ByClient[k])), Dim: true})
 		}
 	}
-	return upper(format.Weekday(dateOf(d.Date)) + " " + format.ShortDate(d.Date)), rows
+	return upper(fmtr.Weekday(dateOf(d.Date)) + " " + fmtr.ShortDate(d.Date)), rows
 }
 
 func metricValues(rep analytics.Report) []float64 {
@@ -401,7 +401,7 @@ func (a *ctrl) heroCard(c *ui.Context, p palette, size cardSize, rep analytics.R
 	p.areaChart(c, "area", areaOpts{
 		Values: metricValues(rep), Compare: compare, Axes: size != sizeM, Columns: size != sizeM,
 		Color: line, Area: alpha(r[2], 0.10), ColColor: cols,
-		Labels: pick(size != sizeM, func(i int) string { return format.ShortDate(rep.Days[i].Date) }, nil),
+		Labels: pick(size != sizeM, func(i int) string { return fmtr.ShortDate(rep.Days[i].Date) }, nil),
 		Tick:   a.tick(rep.Metric), NowLabel: pick(size != sizeM, L("NOW"), ""),
 		Tip: func(i int, cum float64) (string, []tipRow) {
 			d := rep.Days[i]
@@ -410,7 +410,7 @@ func (a *ctrl) heroCard(c *ui.Context, p palette, size cardSize, rep analytics.R
 				rows = append(rows, tipRow{Label: L("Previous"), Value: a.figureText(rep.Metric, cumulative(compare)[i]), Dim: true})
 			}
 			rows = append(rows, tipRow{}, tipRow{Label: L("That day"), Value: a.figureText(rep.Metric, rep.Metric.Value(d))})
-			return upper(format.Weekday(dateOf(d.Date))+" "+format.ShortDate(d.Date)) + " · " + L("DAY %lld", i+1), rows
+			return upper(fmtr.Weekday(dateOf(d.Date))+" "+fmtr.ShortDate(d.Date)) + " · " + L("DAY %lld", i+1), rows
 		},
 	})
 }
@@ -450,7 +450,7 @@ func (a *ctrl) todayCard(c *ui.Context, p palette, size cardSize) {
 			if yBefore > 0 {
 				ui.Row(c).Gap(6).Children(func() {
 					p.mono(c, deltaText(tot, yBefore), 12, p.T1)
-					p.mono(c, L("vs %@ at %@", format.Weekday(now.AddDate(0, 0, -1)), format.Clock(now)), 12, p.T3)
+					p.mono(c, L("vs %@ at %@", fmtr.Weekday(now.AddDate(0, 0, -1)), format.Clock(now)), 12, p.T3)
 				})
 			}
 			if size != sizeM && proj > tot {
@@ -462,7 +462,7 @@ func (a *ctrl) todayCard(c *ui.Context, p palette, size cardSize) {
 	p.areaChart(c, "today", areaOpts{
 		Values: today, Compare: yest, ProjectTo: 48, Axes: size != sizeM, Columns: size != sizeM,
 		Color: r[3], Area: alpha(r[2], 0.10), ColColor: r[0], Tick: shortNum, Ticks: 5,
-		NowLabel: pick(size != sizeM, L("NOW")+" "+format.Clock(now), ""), CompareEnd: pick(size != sizeM, upper(format.Weekday(now.AddDate(0, 0, -1)))+" "+shortNum(ytot), ""),
+		NowLabel: pick(size != sizeM, L("NOW")+" "+format.Clock(now), ""), CompareEnd: pick(size != sizeM, upper(fmtr.Weekday(now.AddDate(0, 0, -1)))+" "+shortNum(ytot), ""),
 		Labels: func(i int) string { return pad2(i / 2) },
 		Tip: func(i int, cum float64) (string, []tipRow) {
 			return pad2(i/2) + ":" + pick(i%2 == 1, "30", "00"), []tipRow{{Label: L("Today"), Value: shortNum(cum)}}

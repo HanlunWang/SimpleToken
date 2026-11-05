@@ -104,3 +104,42 @@ func TestTodayAndNarrowRender(t *testing.T) {
 	nt.Frame()
 	shot(t, nt, "window-narrow")
 }
+
+func TestEditRenders(t *testing.T) {
+	a := newDemoCtrl(t)
+	a.m.s.Theme = "dark"
+	a.w.editing = true
+	a.w.flipped = "hero"
+	tt := ui.NewTester(a.windowView, 1440, 1100)
+	tt.Frame()
+	tt.Frame()
+	for _, want := range []string{"EDITING", "ADD WIDGETS", "TOKENS · OPTIONS"} {
+		if !tt.HasText(want) {
+			t.Errorf("edit: missing %q", want)
+		}
+	}
+	shot(t, tt, "edit")
+}
+
+func TestChineseRenders(t *testing.T) {
+	a := newDemoCtrl(t)
+	setLanguage("zh-Hans")
+	defer setLanguage("en")
+	a.m.s.Theme = "dark"
+	tt := ui.NewTester(a.windowView, 1440, 3200)
+	tt.Frame()
+	tt.Frame()
+	if !tt.HasText("每日用量") {
+		t.Errorf("no Chinese card title in %q", tt.Texts()[:min(40, len(tt.Texts()))])
+	}
+	shot(t, tt, "window-zh")
+	p := ui.NewTester(a.panelView, 360, 1400)
+	p.Frame()
+	p.Frame()
+	shot(t, p, "panel-zh")
+	a.w.settings, a.w.tab = true, "menubar"
+	s := ui.NewTester(a.windowView, 1180, 900)
+	s.Frame()
+	s.Frame()
+	shot(t, s, "settings-zh")
+}

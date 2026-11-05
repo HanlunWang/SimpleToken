@@ -84,7 +84,7 @@ func (a *ctrl) panelHeader(c *ui.Context, p palette) {
 	ui.Row(c.Key("head")).FillWidth().Padding(12, 8, 4, 16).Gap(8).AlignItems(ui.Center).Children(func() {
 		p.brand(c, 12.5, false)
 		now := m.now()
-		p.mono(c, upper(format.Weekday(now)+" "+itoa(now.Day())+" "+format.MonthName(now)), 10.5, p.T3).Shrink(0)
+		p.mono(c, upper(fmtr.Weekday(now)+" "+itoa(now.Day())+" "+fmtr.MonthName(now)), 10.5, p.T3).Shrink(0)
 		ui.Box(c).Grow(1)
 		b := ui.Row(c.Key("refresh")).Height(24).Padding(0, 7).Radius(p.rCtl()).Gap(6).AlignItems(ui.Center).Label(L("Refresh")).Tooltip(L("Refresh") + " ⌘R")
 		b.Background(b.AnimateColor("bg", pick(b.Hovered(), p.L2, ui.Transparent), animHover))
@@ -280,7 +280,7 @@ func (a *ctrl) panelToday(c *ui.Context, p palette) {
 			ui.Column(c.Key("d")).Gap(3).Padding(0, 0, 2).Children(func() {
 				p.mono(c, format.Money(t.CostUSD), 12, p.T1)
 				if d := deltaText(float64(t.TotalTokens), yTotal); d != "" {
-					p.mono(c, d+" "+L("vs %@ at %@", format.Weekday(now.AddDate(0, 0, -1)), format.Clock(now)), 10.5, p.T3)
+					p.mono(c, d+" "+L("vs %@ at %@", fmtr.Weekday(now.AddDate(0, 0, -1)), format.Clock(now)), 10.5, p.T3)
 				}
 			})
 		})
@@ -414,7 +414,7 @@ func (a *ctrl) panelWeek(c *ui.Context, p palette) {
 		ui.Row(c.Key("wd")).FillWidth().Gap(8).Children(func() {
 			for i, d := range days {
 				t, _ := format.DateFromKey(d.Date)
-				ui.Text(c.Key(i), L(format.Weekday(t))).Font(monoFont).FontSize(9.5).TextColor(pick(i == len(days)-1, p.T1, p.T3)).
+				ui.Text(c.Key(i), fmtr.Weekday(t)).Font(monoFont).FontSize(9.5).TextColor(pick(i == len(days)-1, p.T1, p.T3)).
 					Grow(1).Basis(0).TextAlign(ui.Center).SingleLine()
 			}
 		})

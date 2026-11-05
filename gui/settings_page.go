@@ -43,7 +43,7 @@ func (p palette) navItem(c *ui.Context, key, label string, selected bool, trail 
 
 // sHead is a group's heading: a title and a quiet description beside it.
 func (p palette) sHead(c *ui.Context, title, desc string) {
-	ui.Row(c.Key("h"+title)).FillWidth().Gap(10).AlignItems(ui.Baseline).Shrink(0).Children(func() {
+	ui.Row(c.Key("h" + title)).FillWidth().Gap(10).AlignItems(ui.Baseline).Shrink(0).Children(func() {
 		ui.Text(c, title).FontSize(15).FontWeight(600).TextColor(p.T1).SingleLine()
 		if desc != "" {
 			ui.Text(c, desc).FontSize(11).TextColor(p.T3).SingleLine().MinWidth(0).Ellipsis("…")
@@ -329,7 +329,7 @@ func (a *ctrl) setMenuBar(c *ui.Context, p palette) {
 			ui.Text(c, L("PREVIEW")).Font(monoFont).FontSize(10).TextColor(ui.RGBA(255, 255, 255, 0.3)).Grow(1).SingleLine()
 			png, tmpl := renderMenuBar(a.menuBarSegs(), a.mbOptions(true, true))
 			a.menuBarPreview(c, "img", png, tmpl, true)
-			p.mono(c, format.Weekday(a.m.now())+" "+format.Clock(a.m.now()), 12, ui.Hex("#ffffff"))
+			p.mono(c, fmtr.Weekday(a.m.now())+" "+format.Clock(a.m.now()), 12, ui.Hex("#ffffff"))
 		})
 		a.sGroup(c, p, "mb", func() {
 			a.segRow(c, p, "style", L("Style"), L("Gauge glyph, plain numbers, or today's hours as bars"), &s.MenuBarStyle, [][2]string{{"gauge", "Gauge"}, {"numbers", "Numbers"}, {"bars", "Bars"}})
@@ -550,7 +550,7 @@ func (a *ctrl) setData(c *ui.Context, p palette) {
 			h := m.d.History
 			since := "—"
 			if len(h) > 0 {
-				since = L("since %@", format.LongDate(h[0].Date))
+				since = L("since %@", fmtr.LongDate(h[0].Date))
 			}
 			a.sRow(c, p, "dir", L("History"), "~/Library/Application Support/SimpleToken · "+since, func() {
 				if p.button(c, "show", L("Reveal"), "folder-open", btnPlain).Clicked() && a.running {

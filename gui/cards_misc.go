@@ -249,7 +249,7 @@ func (a *ctrl) costCard(c *ui.Context, p palette, size cardSize) {
 		spent = d.Cumulative
 	}
 	now := m.now()
-	lastName := format.MonthName(now.AddDate(0, -1, 0))
+	lastName := fmtr.MonthName(now.AddDate(0, -1, 0))
 	// The month's cost by model: the top three and the rest.
 	byModel := map[string]float64{}
 	for _, d := range m.days(len(mc.Days)) {
@@ -375,7 +375,7 @@ func (a *ctrl) costCard(c *ui.Context, p palette, size cardSize) {
 						hatch(pt, rr, 1.5, alpha(p.FG, 0.4))
 						pt.Stroke(rr, p.L4, 1.5, 1)
 					})
-					ui.Text(c, L("Projected by %@", format.ShortDate(monthEnd(m.d.TodayKey)))).Font(monoFont).FontSize(12).TextColor(p.T2).Grow(1).SingleLine()
+					ui.Text(c, L("Projected by %@", fmtr.ShortDate(monthEnd(m.d.TodayKey)))).Font(monoFont).FontSize(12).TextColor(p.T2).Grow(1).SingleLine()
 					p.mono(c, "+"+format.Money(mc.Projected-spent), 12, p.T1)
 				})
 			}

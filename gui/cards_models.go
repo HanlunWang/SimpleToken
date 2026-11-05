@@ -326,11 +326,11 @@ func (a *ctrl) usageCard(c *ui.Context, p palette, size cardSize, rep analytics.
 	var buckets []bucket
 	if rep.WeeklyBuckets {
 		for i := 0; i < len(days); i += 7 {
-			buckets = append(buckets, bucket{format.ShortDate(days[i].Date), days[i:min(len(days), i+7)]})
+			buckets = append(buckets, bucket{fmtr.ShortDate(days[i].Date), days[i:min(len(days), i+7)]})
 		}
 	} else {
 		for _, d := range days {
-			buckets = append(buckets, bucket{format.ShortDate(d.Date), []analytics.DaySummary{d}})
+			buckets = append(buckets, bucket{fmtr.ShortDate(d.Date), []analytics.DaySummary{d}})
 		}
 	}
 	value := func(bi, ki int) float64 {
@@ -594,7 +594,7 @@ func (a *ctrl) usageIntraday(c *ui.Context, p palette, size cardSize) {
 		}
 		label := ui.Row(c.Key("date")).Height(24).Padding(0, 8).Radius(p.rCtl()).AlignItems(ui.Center).Label(L("Choose a day"))
 		label.Background(label.AnimateColor("bg", pick(label.Hovered() || w.calOpen, p.L2, ui.Transparent), animHover))
-		label.Children(func() { p.mono(c, upper(format.Weekday(t)+" "+format.ShortDate(day)), 11, p.T1) })
+		label.Children(func() { p.mono(c, upper(fmtr.Weekday(t)+" "+fmtr.ShortDate(day)), 11, p.T1) })
 		if label.Clicked() {
 			w.calOpen, w.calDate = !w.calOpen, t
 		}

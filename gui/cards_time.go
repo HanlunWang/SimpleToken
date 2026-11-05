@@ -132,7 +132,7 @@ func (p palette) calendarDots(c *ui.Context, key string, days []analytics.DaySum
 			t, ok := format.DateFromKey(days[min(len(days)-1, wk*7)].Date)
 			if ok && int(t.Month()) != lastMonth && t.Day() <= 7 {
 				if wk > 0 {
-					pt.RichText(r.X+labW+float32(wk)*cw, r.Y, 0, ui.Span{Text: L(format.MonthName(t)), Font: monoFont, Size: 10, Color: p.T3})
+					pt.RichText(r.X+labW+float32(wk)*cw, r.Y, 0, ui.Span{Text: fmtr.MonthName(t), Font: monoFont, Size: 10, Color: p.T3})
 				}
 				lastMonth = int(t.Month())
 			}
