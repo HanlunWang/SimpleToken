@@ -3486,6 +3486,17 @@
         }
       }
     },
+    "Interface size": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "界面大小"
+          }
+        }
+      }
+    },
     "Intraday data": {
       "extractionState": "manual",
       "localizations": {
@@ -6305,6 +6316,17 @@
         }
       }
     },
+    "Show in the Dock": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在 Dock 中显示"
+          }
+        }
+      }
+    },
     "Show labels": {
       "extractionState": "manual",
       "localizations": {
@@ -6774,6 +6796,17 @@
           "stringUnit": {
             "state": "translated",
             "value": "赤陶"
+          }
+        }
+      }
+    },
+    "Text and controls in the window and the panel": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "窗口和面板里的文字与控件"
           }
         }
       }
@@ -7985,6 +8018,17 @@
           "stringUnit": {
             "state": "translated",
             "value": "周数"
+          }
+        }
+      }
+    },
+    "While the window is open; off keeps SimpleToken in the menu bar only": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "窗口打开时显示；关闭则只留在菜单栏"
           }
         }
       }

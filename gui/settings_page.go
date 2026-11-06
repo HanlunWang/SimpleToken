@@ -212,6 +212,7 @@ func (a *ctrl) setGeneral(c *ui.Context, p palette) {
 		p.sHead(c, L("Window"), "")
 		a.sGroup(c, p, "window", func() {
 			a.toggleRow(c, p, "ontop", L("Keep the window on top"), "", &s.FloatingWindow)
+			a.toggleRow(c, p, "dock", L("Show in the Dock"), L("While the window is open; off keeps SimpleToken in the menu bar only"), &s.ShowInDock)
 			a.sRow(c, p, "login", L("Launch at login"), L("macOS may ask you to approve it in System Settings → General → Login Items"), func() {
 				if a.w.login == nil {
 					on := a.loginGet()
@@ -687,6 +688,7 @@ func (a *ctrl) setAppearance(c *ui.Context, p palette) {
 		p.sHead(c, L("Display"), "")
 		a.sGroup(c, p, "display", func() {
 			a.segRow(c, p, "theme", L("Appearance"), L("Follows macOS unless set"), &s.Theme, [][2]string{{"system", "System"}, {"dark", "Dark"}, {"light", "Light"}})
+			a.segRow(c, p, "size", L("Interface size"), L("Text and controls in the window and the panel"), &s.InterfaceSize, [][2]string{{"small", "Small"}, {"medium", "Medium"}, {"large", "Large"}})
 			a.sRow(c, p, "pal", L("Interface palette"), L("SimpleToggle's themes; Graphite keeps the chrome neutral"), func() {
 				for _, id := range palettes {
 					sw := newPalette(p.Dark, id)

@@ -400,6 +400,9 @@ func (a *ctrl) saveSettings() {
 	}
 	if a.win != nil {
 		a.win.SetAlwaysOnTop(s.FloatingWindow)
+		if a.running {
+			mygo.App.SetActivationPolicy(pick(s.ShowInDock, mygo.ActivationPolicyRegular, mygo.ActivationPolicyAccessory))
+		}
 	}
 	a.m.invalidate()
 	if a.demo {
@@ -565,7 +568,9 @@ func (a *ctrl) openWindow(settingsPage bool) {
 		a.win.Invalidate()
 		return
 	}
-	mygo.App.SetActivationPolicy(mygo.ActivationPolicyRegular)
+	if a.m.s.ShowInDock {
+		mygo.App.SetActivationPolicy(mygo.ActivationPolicyRegular)
+	}
 	a.win = mygo.NewWindow(mygo.WindowOptions{
 		Title: "SimpleToken", Width: 1180, Height: 860, MinWidth: 420, MinHeight: 440,
 		TitleBarStyle: mygo.TitleBarHidden, StateKey: "main", AlwaysOnTop: a.m.s.FloatingWindow,

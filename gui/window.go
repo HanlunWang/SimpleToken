@@ -63,7 +63,7 @@ const (
 func (a *ctrl) windowView(c *ui.Context) {
 	p := a.palette(c)
 	c.SetTheme(p.theme(c.Theme()))
-	c.SetZoom(uiZoom)
+	c.SetZoom(interfaceZoom(a.m.s.InterfaceSize))
 	w := a.w
 	c.OnShortcut(ui.Cmd, ui.KeyR, a.refreshAll)
 	c.OnShortcut(ui.Cmd, ui.KeyComma, func() { w.settings = true })

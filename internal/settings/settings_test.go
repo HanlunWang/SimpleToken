@@ -9,16 +9,17 @@ import (
 func TestLoadDefaultsAndRoundTrip(t *testing.T) {
 	t.Setenv("SIMPLETOKEN_DATA_DIR", t.TempDir())
 	s := Load()
-	if s.Range != "1M" || s.SeriesColors != "vendor" || s.Theme != "system" || len(s.CardOrder) != len(Cards) {
+	if s.Range != "1M" || s.SeriesColors != "vendor" || s.Theme != "system" || len(s.CardOrder) != len(Cards) ||
+		s.InterfaceSize != "medium" || s.ShowInDock || s.MenuBarRows != 2 || !s.FirstRun {
 		t.Fatalf("defaults: %+v", s)
 	}
-	s.Palette, s.PanelLimitStyle = "signal", "rings"
+	s.Palette, s.PanelLimitStyle, s.InterfaceSize = "signal", "rings", "huge"
 	if err := s.Save(); err != nil {
 		t.Fatal(err)
 	}
 	got := Load()
-	if got.Palette != "signal" || got.PanelLimitStyle != "gauges" {
-		t.Fatalf("round trip: palette %q, style %q", got.Palette, got.PanelLimitStyle)
+	if got.Palette != "signal" || got.PanelLimitStyle != "gauges" || got.InterfaceSize != "medium" || got.FirstRun {
+		t.Fatalf("round trip: palette %q, style %q, size %q, first run %v", got.Palette, got.PanelLimitStyle, got.InterfaceSize, got.FirstRun)
 	}
 }
 

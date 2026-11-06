@@ -196,7 +196,16 @@ func pick[T any](cond bool, a, b T) T {
 
 func clamp01(v float64) float64 { return math.Max(0, math.Min(1, v)) }
 
-// uiZoom draws the window and the panel at 90 % of the design's DIPs (owner decision 2026-11-05: the design's
-// sizes read too large on screen). Layout stays in design units; mygo renders text and vectors at the zoomed
-// resolution, so nothing is a scaled bitmap.
-const uiZoom = 0.9
+// interfaceZoom is the window and panel zoom for Settings → Appearance → Interface size: medium (90 %, the
+// default; owner decision 2026-11-05: the design's sizes read too large on screen), small 85 %, large the
+// design's 100 %. Layout stays in design units; mygo renders text and vectors at the zoomed resolution, so
+// nothing is a scaled bitmap.
+func interfaceZoom(size string) float32 {
+	switch size {
+	case "small":
+		return 0.85
+	case "large":
+		return 1
+	}
+	return 0.9
+}

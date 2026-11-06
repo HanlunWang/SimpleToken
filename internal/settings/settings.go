@@ -22,6 +22,7 @@ import (
 type Settings struct {
 	// General
 	FloatingWindow  bool   `json:"floatingWindow"`
+	ShowInDock      bool   `json:"showInDock"` // a Dock icon while the window is open; off: menu bar only
 	ClickOpensPanel bool   `json:"clickOpensPanel"`
 	ExactNumbers    bool   `json:"statsExactNumber"`
 	Range           string `json:"dashboardRange"`  // 1D 1W 1M 3M 6M YTD 1Y ALL
@@ -31,6 +32,7 @@ type Settings struct {
 	// Appearance (new in v2)
 	Theme         string `json:"theme"`         // system dark light
 	Palette       string `json:"palette"`       // graphite paper ice
+	InterfaceSize string `json:"interfaceSize"` // small medium large: the window and panel zoom
 	SeriesColors  string `json:"seriesColors"`  // vendor ink
 	VendorMarks   string `json:"vendorMarks"`   // color mono
 	PanelMaterial string `json:"panelMaterial"` // glass solid
@@ -121,7 +123,7 @@ func Default() Settings {
 		Theme: "system", Palette: "graphite", SeriesColors: "vendor", VendorMarks: "color", PanelMaterial: "glass",
 		LiveRefreshSeconds: 30, FullRefreshMinutes: 15,
 		LimitShowUsed: true, AlertThresholds: []float64{50, 80}, LimitShowPace: true, LimitShowModelBuckets: true,
-		MenuBarItems: []string{"claude.session"}, MenuBarStyle: "gauge", MenuBarRows: 2, MenuBarAlertColor: true, MenuBarShowIcon: true, MenuBarShowPace: true,
+		MenuBarItems: []string{"claude.session"}, MenuBarStyle: "gauge", MenuBarRows: 2, InterfaceSize: "medium", MenuBarAlertColor: true, MenuBarShowIcon: true, MenuBarShowPace: true,
 		PanelSections: []string{"claude", "codex", "today", "models", "week"}, PanelWidth: 340, PanelLimitStyle: "gauges",
 		PanelListCount: 5, PanelTodayStyle: "cumulative", PanelShowResets: true,
 		ModelColorOverrides: map[string]string{}, ToolColorOverrides: map[string]string{}, ModelAliases: map[string]string{},
@@ -177,6 +179,9 @@ func (s *Settings) normalize() {
 	}
 	if !slices.Contains([]string{"system", "dark", "light"}, s.Theme) {
 		s.Theme = d.Theme
+	}
+	if !slices.Contains([]string{"small", "medium", "large"}, s.InterfaceSize) {
+		s.InterfaceSize = d.InterfaceSize
 	}
 	if !slices.Contains([]string{"vendor", "ink"}, s.SeriesColors) {
 		s.SeriesColors = d.SeriesColors
