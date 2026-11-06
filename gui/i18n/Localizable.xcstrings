@@ -3907,6 +3907,17 @@
         }
       }
     },
+    "Layout": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "布局"
+          }
+        }
+      }
+    },
     "Left": {
       "extractionState": "manual",
       "localizations": {
@@ -5003,6 +5014,17 @@
           "stringUnit": {
             "state": "translated",
             "value": "一张图，由 macOS 着色"
+          }
+        }
+      }
+    },
+    "One line": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "单行"
           }
         }
       }
@@ -7504,6 +7526,28 @@
         }
       }
     },
+    "Two rows": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "两行"
+          }
+        }
+      }
+    },
+    "Two rows stack the values with short labels and take less width": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "两行显示：数值叠放并带简短标签，更省宽度"
+          }
+        }
+      }
+    },
     "unit.100M": {
       "extractionState": "manual",
       "localizations": {
@@ -7593,13 +7637,13 @@
         }
       }
     },
-    "Up to three, left to right. Drag to reorder.": {
+    "Up to four; two rows fill each column top to bottom. Drag to reorder.": {
       "extractionState": "manual",
       "localizations": {
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "最多三项，从左到右。拖动排序。"
+            "value": "最多四项；两行时每列从上到下排。拖动排序。"
           }
         }
       }

@@ -6,6 +6,7 @@ import (
 	"image/color"
 	"image/png"
 	"math"
+	"strings"
 	"sync"
 
 	"golang.org/x/image/font"
@@ -40,6 +41,7 @@ type mbSeg struct {
 
 type mbOpts struct {
 	Style mbStyle
+	Rows  int // 2 stacks the values in two rows with their labels; 1 (or 0) keeps one line
 	Pace  bool
 	Icon  bool
 	Red   bool // turn red near the limit
@@ -53,6 +55,7 @@ const mbScale = 2 // @2x pixels per point; the image is 18 pt tall
 var (
 	mbFontOnce             sync.Once
 	mbFace, mbSmall, mbMid font.Face
+	mbRowFace, mbRowLabel  font.Face // the two-row layout's values and labels
 )
 
 func mbFonts() {
@@ -72,6 +75,8 @@ func mbFonts() {
 		mbFace = load("GeistMono-Medium.ttf", 12)
 		mbMid = load("GeistMono-Medium.ttf", 10.5)
 		mbSmall = load("Geist-SemiBold.ttf", 8.5)
+		mbRowFace = load("GeistMono-Medium.ttf", 9)
+		mbRowLabel = load("GeistMono-Regular.ttf", 8)
 	})
 }
 
@@ -80,6 +85,7 @@ type mbCanvas struct {
 	ink, alert, dim, soft *image.Alpha // soft: secondary values (62 %); dim: the gauge's rest (35 %)
 	w, h                  int
 	x                     float64 // pen position in pixels
+	red                   bool    // hot values draw in the alert layer
 }
 
 func newMBCanvas(w int) *mbCanvas {
@@ -215,6 +221,7 @@ func renderMenuBar(segs []mbSeg, o mbOpts) ([]byte, bool) {
 	mbFonts()
 	// Measure with a generous canvas, then crop to the drawn width.
 	cv := newMBCanvas(1600)
+	cv.red = o.Red
 	x := 2.0 * mbScale
 	gap := 6.0 * mbScale
 	mid := float64(cv.h) / 2
@@ -238,6 +245,11 @@ func renderMenuBar(segs []mbSeg, o mbOpts) ([]byte, bool) {
 		glyph = true
 	case o.Icon || len(segs) == 0:
 		x += cv.glyph(x) + 5*mbScale
+	}
+	if o.Rows == 2 && textSegs(segs) > 1 {
+		x = cv.rows(segs, x, gap, pick(glyph, bars, -1))
+		w := int(math.Ceil(x + 2*mbScale))
+		return composeMenuBar(cv, w, o)
 	}
 	n := 0
 	for i, s := range segs {
@@ -269,6 +281,96 @@ func renderMenuBar(segs []mbSeg, o mbOpts) ([]byte, bool) {
 	}
 	w := int(math.Ceil(x + 2*mbScale))
 	return composeMenuBar(cv, w, o)
+}
+
+func textSegs(segs []mbSeg) int {
+	n := 0
+	for _, s := range segs {
+		if len(s.Bars) == 0 {
+			n++
+		}
+	}
+	return n
+}
+
+// rows lays the values out in columns of two rows, each a dim label and its value, the values right-aligned in
+// their column; a bars item stays full height between columns, and an odd last value sits centred. skip is the
+// bars item already drawn as the leading glyph.
+func (cv *mbCanvas) rows(segs []mbSeg, x, gap float64, skip int) float64 {
+	mid := float64(cv.h) / 2
+	top, bottom := mid-0.75*mbScale, mid+7.6*mbScale // baselines of the two rows in an 18 pt bar
+	labelGap := 3.5 * mbScale
+	var col []mbSeg
+	n := 0
+	flush := func() {
+		if len(col) == 0 {
+			return
+		}
+		if n > 0 {
+			x += gap + 1*mbScale
+		}
+		// Three sub-columns: labels left-aligned, values right-aligned, countdowns left-aligned after them.
+		lw, vw, aw := 0.0, 0.0, 0.0
+		for _, s := range col {
+			lw = math.Max(lw, cv.label(s.Label, 0, 0, false))
+			vw = math.Max(vw, measure(mbRowFace, s.Value))
+			if s.After != "" {
+				aw = math.Max(aw, 3*mbScale+measure(mbRowLabel, s.After))
+			}
+		}
+		if lw > 0 {
+			lw += labelGap
+		}
+		for i, s := range col {
+			base := pick(len(col) == 1, mid+3.2*mbScale, pick(i == 0, top, bottom))
+			cv.label(s.Label, x, base, true)
+			v := measure(mbRowFace, s.Value)
+			hot := s.Hot && cv.red
+			cv.text(mbRowFace, s.Value, x+lw+vw-v, base, pick(s.Pct < 0 && !hot, cv.soft, cv.layer(hot, false)))
+			if s.After != "" {
+				cv.text(mbRowLabel, s.After, x+lw+vw+3*mbScale, base, cv.soft)
+			}
+		}
+		vw += aw
+		x += lw + vw
+		col = col[:0]
+		n++
+	}
+	for i, s := range segs {
+		if len(s.Bars) > 0 {
+			flush()
+			if i == skip {
+				continue
+			}
+			if n > 0 {
+				x += gap
+			}
+			x += cv.miniBars(x, s)
+			n++
+			continue
+		}
+		col = append(col, s)
+		if len(col) == 2 {
+			flush()
+		}
+	}
+	flush()
+	return x
+}
+
+// label draws (or only measures) a two-row label; words sit a narrow gap apart, not a mono space ("cl 5h").
+func (cv *mbCanvas) label(text string, x, base float64, draw bool) float64 {
+	w := 0.0
+	for i, part := range strings.Fields(text) {
+		if i > 0 {
+			w += 2 * mbScale
+		}
+		if draw {
+			cv.text(mbRowLabel, part, x+w, base, cv.soft)
+		}
+		w += measure(mbRowLabel, part)
+	}
+	return w
 }
 
 // miniBars paints a bars item (today by hour, the last 7 days): the current bar in ink, the rest dim, future

@@ -61,8 +61,8 @@ func TestReadmeImages(t *testing.T) {
 	sheet := image.NewNRGBA(image.Rect(0, 0, 2*cell, len(styles)*44))
 	for i, st := range styles {
 		for j, dark := range []bool{true, false} {
-			o := mbOpts{Style: st, Pace: true, Icon: true, Red: true, Dark: dark}
-			segs := demoSegs()["today"]
+			o := mbOpts{Style: st, Rows: 2, Pace: true, Icon: true, Red: true, Dark: dark}
+			segs := demoSegs()["four"]
 			if st == mbBars {
 				segs = append(demoSegs()["hours"][:1], segs...)
 			}

@@ -24,6 +24,7 @@ var panelSections = [][2]string{
 func (a *ctrl) panelView(c *ui.Context) {
 	p := a.palette(c).panelStyle()
 	c.SetTheme(p.theme(c.Theme()))
+	c.SetZoom(uiZoom)
 	if c.Shortcut(0, ui.KeyEscape) {
 		a.closePanel()
 	}
@@ -75,7 +76,7 @@ func (a *ctrl) panelView(c *ui.Context) {
 	})
 	// Size the flyout to the content (it opens with the last measured height).
 	if h := root.Bounds().H; h > 0 && a.panelResize != nil {
-		a.panelResize(h)
+		a.panelResize(h * uiZoom) // content DIPs → window points
 	}
 }
 

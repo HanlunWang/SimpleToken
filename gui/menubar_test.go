@@ -15,7 +15,8 @@ func demoSegs() map[string][]mbSeg {
 	hours := []float64{0, 0, 0, 0, 0, 0, 0, 0, 2, 5, 9, 8, 4, 6, 9, 11, 7, 0, 0, 0, 0, 0, 0, 0}
 	return map[string][]mbSeg{
 		"claude": {{Label: "5h", Value: "38%", Pct: 38, Pace: 0.52}, {Label: "wk", Value: "57%", Pct: 57, Pace: 0.62}},
-		"three":  {{Label: "Claude 5h", Value: "38%", Pct: 38, Pace: 0.52}, {Label: "Codex 5h", Value: "12%", Pct: 12, Pace: 0.39}, {Label: "Cursor wk", Value: "44%", Pct: 44, Pace: 0.48}},
+		"three":  {{Label: "cl 5h", Value: "38%", Pct: 38, Pace: 0.52}, {Label: "cx 5h", Value: "12%", Pct: 12, Pace: 0.39}, {Label: "cu wk", Value: "44%", Pct: 44, Pace: 0.48}},
+		"four":   {{Label: "5h", Value: "38%", Pct: 38, Pace: 0.52, After: "2h 12m"}, {Label: "wk", Value: "57%", Pct: 57, Pace: 0.62}, {Label: "today", Value: "89.5M", Pct: -1}, {Label: "month", Value: "$427", Pct: -1}},
 		"today":  {{Label: "5h", Value: "38%", Pct: 38, Pace: 0.52}, {Label: "wk", Value: "57%", Pct: 57, Pace: 0.62}, {Label: "today", Value: "89.5M", Pct: -1}},
 		"hot":    {{Label: "5h", Value: "86%", Pct: 86, Pace: 0.7, Hot: true}, {Label: "wk", Value: "57%", Pct: 57, Pace: 0.62}},
 		"hours":  {{Bars: hours, Now: 15, Pct: -1}, {Label: "today", Value: "$55", Pct: -1}},
@@ -26,12 +27,13 @@ func demoSegs() map[string][]mbSeg {
 // TestMenuBarRenders checks every style draws something; with SIMPLETOKEN_SHOTS it also writes a contact sheet.
 func TestMenuBarRenders(t *testing.T) {
 	styles := []mbStyle{mbGauge, mbNumbers, mbBars}
-	names := []string{"claude", "three", "today", "hot", "hours", "empty"}
+	names := []string{"claude", "three", "four", "today", "hot", "hours", "empty"}
 	var rows []image.Image
 	for _, dark := range []bool{true, false} {
 		for _, n := range names {
-			for _, st := range styles {
-				o := mbOpts{Style: st, Pace: true, Icon: true, Red: true, Dark: dark}
+			for _, cell := range [6][2]int{{0, 1}, {1, 1}, {2, 1}, {0, 2}, {1, 2}, {2, 2}} {
+				st := styles[cell[0]]
+				o := mbOpts{Style: st, Rows: cell[1], Pace: true, Icon: true, Red: true, Dark: dark}
 				data, tmpl := renderMenuBar(demoSegs()[n], o)
 				img, err := png.Decode(bytes.NewReader(data))
 				if err != nil {
@@ -54,9 +56,9 @@ func TestMenuBarRenders(t *testing.T) {
 	if dir == "" {
 		return
 	}
-	sheet := image.NewNRGBA(image.Rect(0, 0, 3*300, len(rows)/3*44))
+	sheet := image.NewNRGBA(image.Rect(0, 0, 6*300, len(rows)/6*44))
 	for i, im := range rows {
-		x, y := (i%3)*300, (i/3)*44
+		x, y := (i%6)*300, (i/6)*44
 		draw.Draw(sheet, image.Rect(x, y, x+300, y+44), im, image.Point{}, draw.Src)
 	}
 	f, _ := os.Create(filepath.Join(dir, "menubar.png"))

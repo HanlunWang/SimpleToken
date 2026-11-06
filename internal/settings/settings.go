@@ -55,6 +55,7 @@ type Settings struct {
 	MenuBarShowIcon   bool     `json:"menuBarShowIcon"`
 	MenuBarShowPace   bool     `json:"menuBarShowPace"`
 	MenuBarShowReset  bool     `json:"menuBarShowReset"`
+	MenuBarRows       int      `json:"menuBarRows"` // 1: one line; 2: values stacked in two rows with short labels
 
 	// Panel
 	PanelSections   []string `json:"panelSections"`
@@ -111,13 +112,16 @@ var Cards = []string{
 var DefaultHidden = []string{"stat.totalCost", "stat.messages", "stat.topModel", "stat.weekday"}
 
 // Default returns the settings of a fresh install.
+// maxMenuBarItems fills two rows of two columns.
+const maxMenuBarItems = 4
+
 func Default() Settings {
 	return Settings{
 		ClickOpensPanel: true, Range: "1M", Metric: "tokens", AutoUpdate: true,
 		Theme: "system", Palette: "graphite", SeriesColors: "vendor", VendorMarks: "color", PanelMaterial: "glass",
 		LiveRefreshSeconds: 30, FullRefreshMinutes: 15,
 		LimitShowUsed: true, AlertThresholds: []float64{50, 80}, LimitShowPace: true, LimitShowModelBuckets: true,
-		MenuBarItems: []string{"claude.session"}, MenuBarStyle: "gauge", MenuBarAlertColor: true, MenuBarShowIcon: true, MenuBarShowPace: true,
+		MenuBarItems: []string{"claude.session"}, MenuBarStyle: "gauge", MenuBarRows: 2, MenuBarAlertColor: true, MenuBarShowIcon: true, MenuBarShowPace: true,
 		PanelSections: []string{"claude", "codex", "today", "models", "week"}, PanelWidth: 340, PanelLimitStyle: "gauges",
 		PanelListCount: 5, PanelTodayStyle: "cumulative", PanelShowResets: true,
 		ModelColorOverrides: map[string]string{}, ToolColorOverrides: map[string]string{}, ModelAliases: map[string]string{},
@@ -203,8 +207,11 @@ func (s *Settings) normalize() {
 	default:
 		s.MenuBarStyle = "gauge"
 	}
-	if len(s.MenuBarItems) > 3 {
-		s.MenuBarItems = s.MenuBarItems[:3]
+	if s.MenuBarRows != 1 {
+		s.MenuBarRows = 2
+	}
+	if len(s.MenuBarItems) > maxMenuBarItems {
+		s.MenuBarItems = s.MenuBarItems[:maxMenuBarItems]
 	}
 	// Every known card appears once in the order (new cards are appended).
 	seen := map[string]bool{}

@@ -56,7 +56,7 @@ Charts are drawn with a shared kit of thin marks that animate when you switch th
 
 ### Menu bar
 
-Show any mix of Claude, Codex and Cursor limits, today's tokens or cost, this month's cost, the session reset countdown, and small charts of today by hour and the last seven days. Three styles fit up to three of them into the menu bar: a tick gauge, plain numbers, or today's hours as bars. The item is a template image that follows the menu bar, and turns red when a limit passes your alert threshold.
+Show any mix of Claude, Codex and Cursor limits, today's tokens or cost, this month's cost, the session reset countdown, and small charts of today by hour and the last seven days. Pick up to four and a style: a tick gauge, plain numbers, or today's hours as bars. The values stack in two rows with short labels (5h, wk, today), or sit in one line. The item is a template image that follows the menu bar, and turns red when a limit passes your alert threshold.
 
 <p align="center">
   <img src="docs/images/menubar.png" width="840" alt="Menu bar styles on a dark and a light menu bar">

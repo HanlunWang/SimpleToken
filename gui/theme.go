@@ -195,3 +195,8 @@ func pick[T any](cond bool, a, b T) T {
 }
 
 func clamp01(v float64) float64 { return math.Max(0, math.Min(1, v)) }
+
+// uiZoom draws the window and the panel at 90 % of the design's DIPs (owner decision 2026-11-05: the design's
+// sizes read too large on screen). Layout stays in design units; mygo renders text and vectors at the zoomed
+// resolution, so nothing is a scaled bitmap.
+const uiZoom = 0.9

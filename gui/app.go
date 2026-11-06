@@ -583,11 +583,16 @@ func (a *ctrl) openWindow(settingsPage bool) {
 
 // ── Menu bar item ──
 
+// mbItemLabels are the short codes beside values in the two-row menu bar. They stay English in every language:
+// the menu bar's mono face has no CJK glyphs, and the codes are as short as the values.
 var mbItemLabels = map[string]string{
-	"claude.session": "5h", "claude.weekly": "wk", "claude.fable": "Fable", "codex.session": "5h", "codex.weekly": "wk",
+	"claude.session": "5h", "claude.weekly": "wk", "claude.fable": "fable", "codex.session": "5h", "codex.weekly": "wk",
 	"cursor.weekly": "wk", "today.tokens": "today", "today.cost": "today", "month.cost": "month", "claude.reset": "reset",
 	"today.hours": "today", "week.days": "7d",
 }
+
+// mbProviderCodes prefix a limit's code when the menu bar shows more than one provider's limits.
+var mbProviderCodes = map[string]string{"claude": "cl", "codex": "cx", "cursor": "cu"}
 
 // menuBarSegs turns the chosen items into segments for the renderer.
 func (a *ctrl) menuBarSegs() []mbSeg {
@@ -601,7 +606,7 @@ func (a *ctrl) menuBarSegs() []mbSeg {
 	}
 	var segs []mbSeg
 	for _, it := range m.s.MenuBarItems {
-		label := L(mbItemLabels[it])
+		label := mbItemLabels[it]
 		prov, kind, _ := cutDot(it)
 		switch it {
 		case "today.tokens":
@@ -637,7 +642,7 @@ func (a *ctrl) menuBarSegs() []mbSeg {
 			pace, _ := w.Elapsed(now)
 			hot := w.UsedPercent >= m.s.TopThreshold()
 			if len(providers) > 1 {
-				label = limits.Provider(prov).DisplayName() + " " + label
+				label = mbProviderCodes[prov] + " " + label
 			}
 			seg := mbSeg{Label: label, Value: itoa(int(used+0.5)) + "%", Pct: used, Pace: pace, Hot: hot}
 			if m.s.MenuBarShowReset && w.Kind == limits.Session && w.ResetsAt != nil {

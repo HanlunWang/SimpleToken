@@ -333,8 +333,9 @@ func (a *ctrl) setMenuBar(c *ui.Context, p palette) {
 		})
 		a.sGroup(c, p, "mb", func() {
 			a.segRow(c, p, "style", L("Style"), L("Gauge glyph, plain numbers, or today's hours as bars"), &s.MenuBarStyle, [][2]string{{"gauge", "Gauge"}, {"numbers", "Numbers"}, {"bars", "Bars"}})
-			a.sRow(c, p, "items", L("Items"), L("Up to three, left to right. Drag to reorder."), func() {
-				a.orderList(c, p, "list", &s.MenuBarItems, menuBarItems, 3, func(id string) { swatch(c, a.itemColor(p, id), 7) })
+			a.intSeg(c, p, "rows", L("Layout"), L("Two rows stack the values with short labels and take less width"), &s.MenuBarRows, []int{2, 1}, func(v int) string { return pick(v == 1, L("One line"), L("Two rows")) })
+			a.sRow(c, p, "items", L("Items"), L("Up to four; two rows fill each column top to bottom. Drag to reorder."), func() {
+				a.orderList(c, p, "list", &s.MenuBarItems, menuBarItems, 4, func(id string) { swatch(c, a.itemColor(p, id), 7) })
 			})
 			a.thresholdRow(c, p)
 			a.toggleRow(c, p, "reset", L("Show reset countdown"), L("Adds “2h 12m” after a session value"), &s.MenuBarShowReset)
@@ -388,7 +389,7 @@ func (a *ctrl) thresholdRow(c *ui.Context, p palette) {
 // mbOptions are the renderer's options from the settings.
 func (a *ctrl) mbOptions(dark, preview bool) mbOpts {
 	s := a.m.s
-	return mbOpts{Style: mbStyle(s.MenuBarStyle), Pace: s.MenuBarShowPace, Icon: s.MenuBarShowIcon, Red: s.MenuBarAlertColor, Dark: dark, Preview: preview}
+	return mbOpts{Style: mbStyle(s.MenuBarStyle), Rows: s.MenuBarRows, Pace: s.MenuBarShowPace, Icon: s.MenuBarShowIcon, Red: s.MenuBarAlertColor, Dark: dark, Preview: preview}
 }
 
 // menuBarPreview shows a rendered item on a strip of the bar's colour (a template image is tinted like macOS does).

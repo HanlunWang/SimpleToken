@@ -63,6 +63,7 @@ const (
 func (a *ctrl) windowView(c *ui.Context) {
 	p := a.palette(c)
 	c.SetTheme(p.theme(c.Theme()))
+	c.SetZoom(uiZoom)
 	w := a.w
 	c.OnShortcut(ui.Cmd, ui.KeyR, a.refreshAll)
 	c.OnShortcut(ui.Cmd, ui.KeyComma, func() { w.settings = true })
@@ -323,7 +324,8 @@ func (a *ctrl) pack(n int) ([]placed, int) {
 
 func columnsFor(w float32) int {
 	n := int((w + cellGap) / (minColW + cellGap))
-	return max(2, min(8, n))
+	// Even counts only: M, L and W (2 and 4 wide) tile without holes, so 5 columns become 4.
+	return max(2, min(8, n&^1))
 }
 
 func (a *ctrl) dashboard(c *ui.Context, p palette) {
